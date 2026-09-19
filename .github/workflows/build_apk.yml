@@ -121,7 +121,14 @@ jobs:
             find "$SDK_ROOT" -maxdepth 4 -type f -name sdkmanager -print 2>/dev/null || true
             exit 127
           fi
+          set +o pipefail
           yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" "platforms;android-36"
+          SDKMANAGER_STATUS=${PIPESTATUS[1]}
+          set -o pipefail
+          if [ "$SDKMANAGER_STATUS" -ne 0 ]; then
+            echo "sdkmanager failed with exit code $SDKMANAGER_STATUS" >&2
+            exit "$SDKMANAGER_STATUS"
+          fi
           "$SDKMANAGER" --sdk_root="$SDK_ROOT" --list_installed | grep -E "platforms;android-36" || true
 
       - name: Set up Java
