@@ -24,14 +24,13 @@ jobs:
           flutter-version: '3.22.2'
           channel: 'stable'
 
-      - name: Clean and Create Project Structure
+      - name: Clean Android Setup
         run: |
+          rm -rf android
           flutter create . --platforms=android --project-name=cineverse
-          cd android
-          ./gradlew clean
 
       - name: Get Dependencies
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release --no-pub
+        run: flutter build apk --release
