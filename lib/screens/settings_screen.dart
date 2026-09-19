@@ -6,5 +6,62 @@ import '../providers/media_provider.dart';
 import 'theme_screen.dart';
 import 'api_setup_screen.dart';
 import 'account_screen.dart';
-import '../core/firebase_bootstrap.dart';
-class SettingsScreen extends StatelessWidget{const SettingsScreen({super.key});@override Widget build(BuildContext context){final sp=context.watch<SettingsProvider>();final tp=context.watch<ThemeProvider>();return Scaffold(appBar:AppBar(title:const Text('الإعدادات')),body:ListView(padding:const EdgeInsets.all(16),children:[if(FirebaseBootstrap.configured) Card(child:ListTile(leading:const Icon(Icons.account_circle),title:const Text('حساب Google'),subtitle:const Text('مزامنة مكتبتك وملاحظاتك عبر الأجهزة'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const AccountScreen())))),Card(child:ListTile(leading:const Icon(Icons.key),title:const Text('إعداد مفاتيح API'),subtitle:const Text('TMDB و Gemini'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const ApiSetupScreen())))),const Text('اللغة',style:TextStyle(fontWeight:FontWeight.bold)),RadioListTile(value:'ar',groupValue:sp.locale.languageCode,onChanged:(_)=>sp.setLocale(const Locale('ar')),title:const Text('العربية')),RadioListTile(value:'en',groupValue:sp.locale.languageCode,onChanged:(_)=>sp.setLocale(const Locale('en')),title:const Text('English')),RadioListTile(value:'fr',groupValue:sp.locale.languageCode,onChanged:(_)=>sp.setLocale(const Locale('fr')),title:const Text('Français')),const Divider(),const Text('المظهر',style:TextStyle(fontWeight:FontWeight.bold)),RadioListTile(value:ThemeMode.system,groupValue:sp.themeMode,onChanged:(v){if(v!=null)sp.setThemeMode(v);},title:const Text('حسب النظام')),RadioListTile(value:ThemeMode.light,groupValue:sp.themeMode,onChanged:(v){if(v!=null)sp.setThemeMode(v);},title:const Text('فاتح')),RadioListTile(value:ThemeMode.dark,groupValue:sp.themeMode,onChanged:(v){if(v!=null)sp.setThemeMode(v);},title:const Text('داكن')),ListTile(leading:Icon(Icons.palette,color:tp.effectiveSeed),title:const Text('الألوان والثيمات'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const ThemeScreen()))),ListTile(leading:const Icon(Icons.delete_forever),title:const Text('مسح المكتبة'),onTap:()=>showDialog(context:context,builder:(_)=>AlertDialog(title:const Text('تأكيد'),content:const Text('سيتم حذف كل العناصر المحفوظة.'),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('إلغاء')),ElevatedButton(onPressed:(){context.read<MediaProvider>().clearLibrary();Navigator.pop(context);},child:const Text('حذف'))]))),const SizedBox(height:20),const Center(child:Text('CineVerse 1.0.0'))]));}}
+
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final sp = context.watch<SettingsProvider>();
+    final tp = context.watch<ThemeProvider>();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('الإعدادات')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.account_circle),
+              title: const Text('حساب Google'),
+              subtitle: const Text('تسجيل الدخول ومزامنة مكتبتك عبر الأجهزة'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AccountScreen()),
+              ),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.key),
+              title: const Text('إعداد مفاتيح API'),
+              subtitle: const Text('TMDB و Gemini'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ApiSetupScreen()),
+              ),
+            ),
+          ),
+          const Text('اللغة', style: TextStyle(fontWeight: FontWeight.bold)),
+          RadioListTile(value: 'ar', groupValue: sp.locale.languageCode, onChanged: (_) => sp.setLocale(const Locale('ar')), title: const Text('العربية')),
+          RadioListTile(value: 'en', groupValue: sp.locale.languageCode, onChanged: (_) => sp.setLocale(const Locale('en')), title: const Text('English')),
+          RadioListTile(value: 'fr', groupValue: sp.locale.languageCode, onChanged: (_) => sp.setLocale(const Locale('fr')), title: const Text('Français')),
+          const Divider(),
+          const Text('المظهر', style: TextStyle(fontWeight: FontWeight.bold)),
+          RadioListTile(value: ThemeMode.system, groupValue: sp.themeMode, onChanged: (v) { if (v != null) sp.setThemeMode(v); }, title: const Text('حسب النظام')),
+          RadioListTile(value: ThemeMode.light, groupValue: sp.themeMode, onChanged: (v) { if (v != null) sp.setThemeMode(v); }, title: const Text('فاتح')),
+          RadioListTile(value: ThemeMode.dark, groupValue: sp.themeMode, onChanged: (v) { if (v != null) sp.setThemeMode(v); }, title: const Text('داكن')),
+          ListTile(leading: Icon(Icons.palette, color: tp.effectiveSeed), title: const Text('الألوان والثيمات'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ThemeScreen()))),
+          ListTile(leading: const Icon(Icons.delete_forever), title: const Text('مسح المكتبة'), onTap: () => showDialog(context: context, builder: (_) => AlertDialog(title: const Text('تأكيد'), content: const Text('سيتم حذف كل العناصر المحفوظة.'), actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+            ElevatedButton(onPressed: () { context.read<MediaProvider>().clearLibrary(); Navigator.pop(context); }, child: const Text('حذف')),
+          ]))),
+          const SizedBox(height: 20),
+          const Center(child: Text('CineVerse 1.0.0')),
+        ],
+      ),
+    );
+  }
+}
