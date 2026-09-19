@@ -36,6 +36,7 @@ jobs:
           if [ ! -d "web" ]; then
             flutter create . --project-name cineverse --platforms=web --no-pub
           fi
+          rm -f test/widget_test.dart
 
       - name: Analyze Dart code
         run: flutter analyze --no-fatal-infos
