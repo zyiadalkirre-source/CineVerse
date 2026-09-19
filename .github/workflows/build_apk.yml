@@ -122,6 +122,37 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      - name: Patch legacy speech_to_text Android build config
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import glob
+
+          matches = glob.glob('/home/runner/.pub-cache/hosted/pub.dev/speech_to_text-7.2.0/android/build.gradle')
+          if not matches:
+              raise SystemExit('speech_to_text 7.2.0 Android build.gradle was not found')
+
+          path = Path(matches[0])
+          text = path.read_text()
+
+          replacements = {
+              'compileSdkVersion flutter.compileSdkVersion': 'compileSdkVersion 36',
+              'minSdkVersion flutter.minSdkVersion': 'minSdkVersion 24',
+              'targetSdkVersion flutter.targetSdkVersion': 'targetSdkVersion 36',
+          }
+          for old, new in replacements.items():
+              text = text.replace(old, new)
+
+          path.write_text(text)
+
+          remaining = [token for token in replacements if token in text]
+          if remaining:
+              raise SystemExit('Unpatched speech_to_text Flutter Gradle references: ' + ', '.join(remaining))
+
+          print('Patched', path)
+          PY
+
       - name: Analyze Dart code
         run: flutter analyze --no-fatal-infos
 
