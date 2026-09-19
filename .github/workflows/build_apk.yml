@@ -52,6 +52,7 @@ jobs:
 
           if app_gradle.exists():
               text = app_gradle.read_text()
+              text = text.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 24")
               block = """
           configurations.all {
               resolutionStrategy.eachDependency { details ->
