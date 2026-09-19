@@ -50,7 +50,7 @@ jobs:
           settings_gradle = root / "settings.gradle"
           app_gradle = root / "app" / "build.gradle"
 
-          kotlin_version = "2.0.20"
+          kotlin_version = "2.3.21"
 
           # Flutter 3.22 can generate the Kotlin version in either
           # settings.gradle or the legacy root build.gradle depending on the
@@ -95,7 +95,7 @@ jobs:
                   combined += path.read_text() + "\n"
 
           if kotlin_version not in combined:
-              raise SystemExit("Kotlin 2.0.20 was not applied to the Android project")
+              raise SystemExit("Kotlin 2.3.21 was not applied to the Android project")
 
           print("Android Gradle project prepared with Kotlin", kotlin_version)
           PY
