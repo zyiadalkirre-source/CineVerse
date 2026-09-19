@@ -31,6 +31,12 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      - name: Ensure Web platform exists
+        run: |
+          if [ ! -d "web" ]; then
+            flutter create . --platforms=web --no-pub
+          fi
+
       - name: Analyze Dart code
         run: flutter analyze --no-fatal-infos
 
