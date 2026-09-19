@@ -36,6 +36,9 @@ jobs:
               --no-pub
           fi
 
+          # The generated Flutter test template references MyApp, while CineVerse has its own app entrypoint.
+          rm -f test/widget_test.dart
+
           # Align Kotlin versions in the generated Android project.
           python3 - <<'PY'
           from pathlib import Path
