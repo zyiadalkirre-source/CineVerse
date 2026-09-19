@@ -39,40 +39,68 @@ jobs:
           # The generated Flutter test template references MyApp, while CineVerse has its own app entrypoint.
           rm -f test/widget_test.dart
 
-          # Align Kotlin versions in the generated Android project.
+          # flutter_litert_lm 0.3.0 uses the Kotlin compilerOptions DSL.
+          # Kotlin 1.8.x is too old for that API, so keep the generated Android
+          # project on a compatible Kotlin/Gradle combination.
           python3 - <<'PY'
           from pathlib import Path
 
           root = Path("android")
           build_gradle = root / "build.gradle"
+          settings_gradle = root / "settings.gradle"
           app_gradle = root / "app" / "build.gradle"
 
-          if build_gradle.exists():
-              text = build_gradle.read_text()
-              text = text.replace("ext.kotlin_version = '1.7.10'", "ext.kotlin_version = '1.8.22'")
-              text = text.replace('ext.kotlin_version = "1.7.10"', 'ext.kotlin_version = "1.8.22"')
-              build_gradle.write_text(text)
+          kotlin_version = "2.0.20"
+
+          # Flutter 3.22 can generate the Kotlin version in either
+          # settings.gradle or the legacy root build.gradle depending on the
+          # template. Patch both forms so CI is deterministic.
+          for path in (settings_gradle, build_gradle):
+              if path.exists():
+                  text = path.read_text()
+                  text = text.replace('"1.7.10"', f'"{kotlin_version}"')
+                  text = text.replace("'1.7.10'", f"'{kotlin_version}'")
+                  text = text.replace('"1.8.22"', f'"{kotlin_version}"')
+                  text = text.replace("'1.8.22'", f"'{kotlin_version}'")
+                  path.write_text(text)
 
           if app_gradle.exists():
               text = app_gradle.read_text()
               text = text.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 24")
-              block = """
-          configurations.all {
-              resolutionStrategy.eachDependency { details ->
-                  if (details.requested.group == "org.jetbrains.kotlin") {
-                      details.useVersion "1.8.22"
-                  }
-              }
-          }
-          """
+              text = text.replace("details.useVersion \"1.8.22\"", f'details.useVersion "{kotlin_version}"')
+              text = text.replace("details.useVersion \"1.7.10\"", f'details.useVersion "{kotlin_version}"')
               if "resolutionStrategy.eachDependency" not in text:
+                  block = f"""
+          configurations.all {{
+              resolutionStrategy.eachDependency {{ details ->
+                  if (details.requested.group == "org.jetbrains.kotlin") {{
+                      details.useVersion "{kotlin_version}"
+                  }}
+              }}
+          }}
+          """
                   text += "\n" + block
               app_gradle.write_text(text)
+
+          # Fail early if the Android template did not receive the required
+          # Kotlin version instead of producing a less useful Gradle error.
+          combined = ""
+          for path in (settings_gradle, build_gradle, app_gradle):
+              if path.exists():
+                  combined += path.read_text() + "\n"
+
+          if kotlin_version not in combined:
+              raise SystemExit("Kotlin 2.0.20 was not applied to the Android project")
+
+          print("Android Gradle project prepared with Kotlin", kotlin_version)
           PY
 
           echo "===== Android Gradle configuration ====="
-          sed -n '1,220p' android/build.gradle
-          sed -n '1,260p' android/app/build.gradle
+          sed -n '1,240p' android/settings.gradle
+          sed -n '1,240p' android/build.gradle
+          sed -n '1,300p' android/app/build.gradle
+          echo "===== Gradle wrapper ====="
+          grep -n "distributionUrl" android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Set up Java
         uses: actions/setup-java@v5
