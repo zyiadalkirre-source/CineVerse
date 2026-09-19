@@ -25,7 +25,7 @@ class AppTheme {
           fontWeight: FontWeight.bold,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: isDark ? const Color(AppColors.darkCard) : Colors.white,
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
