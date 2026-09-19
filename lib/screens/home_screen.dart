@@ -63,18 +63,68 @@ class _Library extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MediaProvider>();
-    if (provider.library.isEmpty) {
-      return const Center(child: Text('أضف أفلاماً ومسلسلات إلى مكتبتك من البحث'));
-    }
-    return GridView.builder(
-      padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3, crossAxisSpacing: 10, mainAxisSpacing: 10,
-        childAspectRatio: .62),
-      itemCount: provider.library.length,
-      itemBuilder: (_, index) => _MediaCard(provider.library[index]),
-    );
+    final theme = Theme.of(context);
+    return CustomScrollView(slivers: [
+      SliverAppBar(
+        floating: true,
+        title: const Text('CineVerse', style: TextStyle(fontWeight: FontWeight.w800)),
+        actions: [
+          IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())), icon: const Icon(Icons.search)),
+          IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())), icon: const Icon(Icons.settings_outlined)),
+        ],
+      ),
+      SliverToBoxAdapter(child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [theme.colorScheme.primary, theme.colorScheme.secondary]),
+          boxShadow: [BoxShadow(color: theme.colorScheme.primary.withOpacity(.22), blurRadius: 24, offset: const Offset(0, 10))],
+        ),
+        child: Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('عالمك السينمائي', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900, color: Colors.white)),
+            const SizedBox(height: 8),
+            Text(provider.library.isEmpty ? 'اكتشف، احفظ، وتابع كل ما تحب.' : provider.library.length.toString() + ' عمل محفوظ في مكتبتك',
+              style: const TextStyle(color: Colors.white70, fontSize: 14)),
+            const SizedBox(height: 18),
+            FilledButton.tonalIcon(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
+              icon: const Icon(Icons.explore), label: const Text('اكتشف الآن'),
+            ),
+          ])),
+          const SizedBox(width: 10),
+          const Icon(Icons.movie_filter_rounded, size: 82, color: Colors.white24),
+        ]),
+      )),
+      if (provider.library.isNotEmpty) ...[
+        const SliverToBoxAdapter(child: _SectionHeader(title: 'مكتبتك', icon: Icons.video_library)),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 170, mainAxisExtent: 265, crossAxisSpacing: 12, mainAxisSpacing: 14),
+            delegate: SliverChildBuilderDelegate((_, i) => _MediaCard(provider.library[i]), childCount: provider.library.length),
+          ),
+        ),
+      ] else
+        const SliverFillRemaining(hasScrollBody: false, child: Center(
+          child: Padding(padding: EdgeInsets.all(32),
+            child: Text('مكتبتك فاضية حالياً\nابحث عن فيلم أو مسلسل وأضفه هون.',
+              textAlign: TextAlign.center, style: TextStyle(fontSize: 17))),
+        )),
+    ]);
   }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title; final IconData icon;
+  const _SectionHeader({required this.title, required this.icon});
+  @override Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
+    child: Row(children: [Icon(icon, size: 20), const SizedBox(width: 8),
+      Text(title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800))]),
+  );
 }
 
 class _Discover extends StatefulWidget {
