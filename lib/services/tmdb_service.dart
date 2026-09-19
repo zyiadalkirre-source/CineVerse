@@ -127,4 +127,18 @@ class TmdbService {
       MediaItem.fromJson({...Map<String, dynamic>.from(i), 'media_type': type})
     ).toList();
   }
+  Future<List<Map<String, dynamic>>> getTvEpisodes(int id, int season, {String lang = 'ar'}) async {
+    _checkApiKey();
+    final url = Uri.parse('$_base/tv/$id/season/$season').replace(queryParameters: {
+      'api_key': _apiKey,
+      'language': lang,
+    });
+    final res = await http.get(url);
+    if (res.statusCode != 200) return [];
+    final data = json.decode(utf8.decode(res.bodyBytes));
+    final raw = data['episodes'];
+    if (raw is! List) return [];
+    return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
 }
