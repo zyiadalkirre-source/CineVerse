@@ -87,7 +87,9 @@ jobs:
         run: flutter analyze --no-fatal-infos
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: flutter build apk --release \
+            --dart-define=TMDB_API_KEY="${{ secrets.TMDB_API_KEY }}" \
+            --dart-define=GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
 
       - name: Verify APK exists
         shell: bash
