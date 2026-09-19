@@ -24,6 +24,9 @@ jobs:
           flutter-version: '3.19.6'
           channel: 'stable'
 
+      - name: Create Android Folder Structure
+        run: flutter create . --platforms=android --project-name=cineverse
+
       - name: Get Dependencies
         run: flutter pub get
 
