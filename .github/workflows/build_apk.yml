@@ -67,7 +67,11 @@ jobs:
           if app_gradle.exists():
               text = app_gradle.read_text()
               text = text.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
+              text = text.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
               text = text.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 24")
+              text = text.replace("minSdk = flutter.minSdkVersion", "minSdk = 24")
+              text = text.replace("targetSdkVersion flutter.targetSdkVersion", "targetSdkVersion 36")
+              text = text.replace("targetSdk = flutter.targetSdkVersion", "targetSdk = 36")
               text = text.replace("details.useVersion \"1.8.22\"", f'details.useVersion "{kotlin_version}"')
               text = text.replace("details.useVersion \"1.7.10\"", f'details.useVersion "{kotlin_version}"')
               if "resolutionStrategy.eachDependency" not in text:
@@ -106,8 +110,19 @@ jobs:
       - name: Install Android SDK 36
         shell: bash
         run: |
-          yes | sdkmanager "platforms;android-36"
-          sdkmanager --list_installed | grep -E "platforms;android-36" || true
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Android/Sdk}}"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager -print -quit 2>/dev/null || true)"
+          fi
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "Android sdkmanager was not found under $SDK_ROOT/cmdline-tools" >&2
+            find "$SDK_ROOT" -maxdepth 4 -type f -name sdkmanager -print 2>/dev/null || true
+            exit 127
+          fi
+          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" "platforms;android-36"
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" --list_installed | grep -E "platforms;android-36" || true
 
       - name: Set up Java
         uses: actions/setup-java@v5
