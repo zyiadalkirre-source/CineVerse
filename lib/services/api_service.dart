@@ -9,7 +9,7 @@ class ApiService {
     if(key.trim().isEmpty) throw StateError('TMDB API key is not configured.');
     final uri=Uri.parse('${AppConstants.tmdbBaseUrl}/trending/$mediaType/$timeWindow').replace(queryParameters:{'api_key':key});
     final response=await http.get(uri);
-    if(response.statusCode!=200) throw Exception('Failed to load media data (\${response.statusCode}).');
+    if(response.statusCode!=200) throw Exception('Failed to load media data (${response.statusCode}).');
     final data=json.decode(utf8.decode(response.bodyBytes));
     return data is Map && data['results'] is List ? List<dynamic>.from(data['results']) : <dynamic>[];
   }
