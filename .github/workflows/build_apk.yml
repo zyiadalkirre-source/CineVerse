@@ -133,6 +133,20 @@ jobs:
           }}
           """
                   text += "\n" + block
+              # Explicitly force Java 17, Kotlin 17 and NDK 27 on the generated app module.
+              text += """
+          android {
+              ndkVersion "27.0.12077973"
+              compileOptions {
+                  coreLibraryDesugaringEnabled true
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+          """
               app_gradle.write_text(text)
 
           # Fail early if the Android template did not receive the required
