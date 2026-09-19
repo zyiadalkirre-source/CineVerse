@@ -1,3 +1,5 @@
+const _copyWithUnset = Object();
+
 class MediaItem {
   final int id;
   final String title;
@@ -63,13 +65,13 @@ class MediaItem {
     );
   }
 
-  MediaItem copyWith({int? id,String? title,String? originalTitle,String? overview,String? posterPath,String? backdropPath,double? voteAverage,int? voteCount,String? releaseDate,String? mediaType,List<String>? genres,List<String>? cast,String? director,int? runtime,int? seasons,int? episodes,String? trailerKey,String? watchStatus,double? userRating,String? notes}) => MediaItem(
+  MediaItem copyWith({int? id,String? title,String? originalTitle,String? overview,String? posterPath,String? backdropPath,double? voteAverage,int? voteCount,String? releaseDate,String? mediaType,List<String>? genres,List<String>? cast,String? director,int? runtime,int? seasons,int? episodes,String? trailerKey,String? watchStatus,Object? userRating=_copyWithUnset,String? notes}) => MediaItem(
     id:id??this.id,title:title??this.title,originalTitle:originalTitle??this.originalTitle,overview:overview??this.overview,
     posterPath:posterPath??this.posterPath,backdropPath:backdropPath??this.backdropPath,voteAverage:voteAverage??this.voteAverage,
     voteCount:voteCount??this.voteCount,releaseDate:releaseDate??this.releaseDate,mediaType:mediaType??this.mediaType,
     genres:genres??this.genres,cast:cast??this.cast,director:director??this.director,runtime:runtime??this.runtime,
     seasons:seasons??this.seasons,episodes:episodes??this.episodes,trailerKey:trailerKey??this.trailerKey,
-    watchStatus:watchStatus??this.watchStatus,userRating:userRating??this.userRating,notes:notes??this.notes);
+    watchStatus:watchStatus??this.watchStatus,userRating:userRating==_copyWithUnset?this.userRating:userRating as double?,notes:notes??this.notes);
 
   Map<String,dynamic> toJson()=>{'id':id,'title':title,'original_title':originalTitle,'overview':overview,'poster_path':posterPath,'backdrop_path':backdropPath,'vote_average':voteAverage,'vote_count':voteCount,'release_date':releaseDate,'media_type':mediaType,'genres':genres,'cast':cast,'director':director,'runtime':runtime,'number_of_seasons':seasons,'number_of_episodes':episodes,'trailer_key':trailerKey,'watch_status':watchStatus,'user_rating':userRating,'notes':notes};
 }

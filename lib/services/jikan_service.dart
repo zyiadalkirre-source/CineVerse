@@ -83,7 +83,15 @@ class JikanService {
   }
 
   int? _parseDuration(String d) {
-    final match = RegExp(r'(\d+)').firstMatch(d);
-    return match == null ? null : int.tryParse(match.group(1)!);
+    final normalized = d.toLowerCase();
+    final hourMatch = RegExp(r'(\d+)\s*(?:hr|hrs|hour|hours)').firstMatch(normalized);
+    final minuteMatch = RegExp(r'(\d+)\s*(?:min|mins|minute|minutes)').firstMatch(normalized);
+    final hours = int.tryParse(hourMatch?.group(1) ?? '') ?? 0;
+    final minutes = int.tryParse(minuteMatch?.group(1) ?? '') ?? 0;
+    if (hours == 0 && minutes == 0) {
+      final fallback = RegExp(r'(\d+)').firstMatch(normalized);
+      return fallback == null ? null : int.tryParse(fallback.group(1)!);
+    }
+    return hours * 60 + minutes;
   }
 }
