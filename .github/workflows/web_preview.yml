@@ -34,7 +34,7 @@ jobs:
       - name: Ensure Web platform exists
         run: |
           if [ ! -d "web" ]; then
-            flutter create . --platforms=web --no-pub
+            flutter create . --project-name cineverse --platforms=web --no-pub
           fi
 
       - name: Analyze Dart code
