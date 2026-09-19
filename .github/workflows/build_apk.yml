@@ -72,8 +72,7 @@ jobs:
           if settings_gradle.exists():
               text = settings_gradle.read_text()
               import re
-              text = re.sub(r'(id\\s*\\(?"com\\.android\\.application"\\)?\\s+version\\s+")([0-9.]+)(")', rf'\\g<1>{agp_version}\\g<3>', text)
-              text = re.sub(r"(id\\s*\\(?" + "'com\\.android\\.application'" + r"\\)?\\s+version\\s+')" + r"([0-9.]+)(')" + r"", rf"\\g<1>{agp_version}\\g<3>", text)
+              text = re.sub(r'(id\s*\(?["']com\.android\.application["']\)?\s+version\s+["'])([0-9.]+)(["'])', rf'\g<1>{agp_version}\g<3>', text)
               settings_gradle.write_text(text)
 
           if wrapper_props.exists():
