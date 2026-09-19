@@ -9,15 +9,23 @@ class ApiService {
     String mediaType = 'all', 
     String timeWindow = 'day',
   }) async {
-    final response = await http.get(
-      Uri.parse('$_baseUrl/trending/$mediaType/$timeWindow?api_key=$_apiKey'),
+    if (_apiKey == 'YOUR_TMDB_API_KEY') {
+      throw StateError(
+        'TMDB API key is not configured. Replace YOUR_TMDB_API_KEY '
+        'with a valid key before requesting media data.',
+      );
+    }
+
+    final uri = Uri.parse('$_baseUrl/trending/$mediaType/$timeWindow').replace(
+      queryParameters: {'api_key': _apiKey},
     );
+    final response = await http.get(uri);
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
       return data['results'] ?? [];
     } else {
-      throw Exception('Failed to load media data');
+      throw Exception('Failed to load media data (' + response.statusCode.toString() + ').');
     }
   }
 }
