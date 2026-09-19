@@ -4,6 +4,7 @@ import '../core/constants.dart';
 import '../l10n/translations.dart';
 import '../models/media_item.dart';
 import '../providers/media_provider.dart';
+import '../providers/settings_provider.dart';
 import 'search_screen.dart';
 import 'detail_screen.dart';
 import 'ai_hub_screen.dart';
