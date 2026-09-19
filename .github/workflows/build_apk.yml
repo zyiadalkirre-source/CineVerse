@@ -36,6 +36,40 @@ jobs:
               --no-pub
           fi
 
+          # Align Kotlin versions in the generated Android project.
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path("android")
+          build_gradle = root / "build.gradle"
+          app_gradle = root / "app" / "build.gradle"
+
+          if build_gradle.exists():
+              text = build_gradle.read_text()
+              text = text.replace("ext.kotlin_version = '1.7.10'", "ext.kotlin_version = '1.8.22'")
+              text = text.replace('ext.kotlin_version = "1.7.10"', 'ext.kotlin_version = "1.8.22"')
+              build_gradle.write_text(text)
+
+          if app_gradle.exists():
+              text = app_gradle.read_text()
+              block = """
+          configurations.all {
+              resolutionStrategy.eachDependency { details ->
+                  if (details.requested.group == "org.jetbrains.kotlin") {
+                      details.useVersion "1.8.22"
+                  }
+              }
+          }
+          """
+              if "resolutionStrategy.eachDependency" not in text:
+                  text += "\n" + block
+              app_gradle.write_text(text)
+          PY
+
+          echo "===== Android Gradle configuration ====="
+          sed -n '1,220p' android/build.gradle
+          sed -n '1,260p' android/app/build.gradle
+
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
