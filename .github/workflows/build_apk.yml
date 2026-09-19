@@ -1,40 +1,64 @@
+```yaml
 name: Build Android APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   build:
+    name: Build Release APK
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      # تحميل المشروع
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
+      # إعداد Java
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
 
+      # إعداد Flutter
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.2'
-          channel: 'stable'
+          flutter-version: "3.22.2"
+          channel: stable
+          cache: true
 
-      - name: Clean and Create Project
-        run: |
-          rm -rf android
-          flutter create . --platforms=android --project-name=cineverse
+      # التحقق من Flutter
+      - name: Flutter Doctor
+        run: flutter doctor -v
 
-      - name: Fix Kotlin Version Conflict
-        run: |
-          echo "ext.kotlin_version = '1.9.24'" >> android/build.gradle
-
-      - name: Get Dependencies
+      # تنزيل المكتبات
+      - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Build APK
+      # تنظيف المشروع
+      - name: Clean Flutter project
+        run: flutter clean
+
+      # تنزيل المكتبات مرة ثانية بعد التنظيف
+      - name: Get dependencies again
+        run: flutter pub get
+
+      # بناء APK
+      - name: Build Release APK
         run: flutter build apk --release
+
+      # رفع APK إلى GitHub Actions
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cineverse-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+```
