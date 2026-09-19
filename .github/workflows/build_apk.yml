@@ -50,11 +50,30 @@ jobs:
           settings_gradle = root / "settings.gradle"
           app_gradle = root / "app" / "build.gradle"
 
+          # Kotlin 2.3.21 requires Android Gradle Plugin 8.2.2+.
+          # Flutter 3.22.2 can generate AGP 7.3.0, so patch the generated
+          # Android project and wrapper to a compatible toolchain.
+          wrapper_props = root / "gradle" / "wrapper" / "gradle-wrapper.properties"
+
           kotlin_version = "2.3.21"
+          agp_version = "8.2.2"
+          gradle_version = "8.2"
 
           # Flutter 3.22 can generate the Kotlin version in either
           # settings.gradle or the legacy root build.gradle depending on the
           # template. Patch both forms so CI is deterministic.
+          if build_gradle.exists():
+              text = build_gradle.read_text()
+              text = text.replace("com.android.tools.build:gradle:7.3.0", f"com.android.tools.build:gradle:{agp_version}")
+              text = text.replace("com.android.tools.build:gradle:7.4.2", f"com.android.tools.build:gradle:{agp_version}")
+              build_gradle.write_text(text)
+
+          if wrapper_props.exists():
+              text = wrapper_props.read_text()
+              import re
+              text = re.sub(r"distributionUrl=.*", f"distributionUrl=https\\://services.gradle.org/distributions/gradle-{gradle_version}-all.zip", text)
+              wrapper_props.write_text(text)
+
           for path in (settings_gradle, build_gradle):
               if path.exists():
                   text = path.read_text()
@@ -96,8 +115,10 @@ jobs:
 
           if kotlin_version not in combined:
               raise SystemExit("Kotlin 2.3.21 was not applied to the Android project")
+          if f"com.android.tools.build:gradle:{agp_version}" not in combined:
+              raise SystemExit(f"AGP {agp_version} was not applied to the Android project")
 
-          print("Android Gradle project prepared with Kotlin", kotlin_version)
+          print("Android Gradle project prepared with Kotlin", kotlin_version, "and AGP", agp_version)
           PY
 
           # LiteRT-LM 0.3.0 ships an AAR containing Java 21 bytecode.
