@@ -3,6 +3,7 @@ import 'ai_chat_screen.dart';
 import 'ai_mood_screen.dart';
 import 'ai_poster_screen.dart';
 import 'ai_taste_screen.dart';
+import 'turtle_screen.dart';
 
 class AiHubScreen extends StatelessWidget {
   const AiHubScreen({super.key});
@@ -13,6 +14,7 @@ class AiHubScreen extends StatelessWidget {
       ('حسب مزاجي', Icons.mood, const AiMoodScreen()),
       ('تحليل بوستر', Icons.image, const AiPosterScreen()),
       ('تحليل ذوقي', Icons.psychology, const AiTasteScreen()),
+      ('🐢 Turtle محلي', Icons.smart_toy, const TurtleScreen()),
     ];
     return GridView.builder(
       padding: const EdgeInsets.all(16),
