@@ -21,6 +21,7 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   sqflite: ^2.3.2
+  sqflite_common_ffi_web: ^1.2.0
   path: ^1.9.0
   google_fonts: ^6.2.1
   fl_chart: ^0.68.0
