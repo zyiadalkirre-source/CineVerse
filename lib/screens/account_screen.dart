@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import '../services/cloud_sync_service.dart';
+import '../core/firebase_bootstrap.dart';
 import 'package:provider/provider.dart';
 import '../providers/media_provider.dart';
 
@@ -29,6 +30,9 @@ class _AccountScreenState extends State<AccountScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!FirebaseBootstrap.configured) {
+      return Scaffold(appBar: AppBar(title: const Text('حساب CineVerse')), body: const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('تم تجهيز ربط Google والمزامنة، لكن يحتاج التطبيق إلى إعداد Firebase الخاص بالمشروع قبل تفعيل تسجيل الدخول.', textAlign: TextAlign.center))));
+    }
     final user = FirebaseAuth.instance.currentUser;
     return Scaffold(
       appBar: AppBar(title: const Text('حساب CineVerse')),
@@ -72,7 +76,9 @@ class _AccountScreenState extends State<AccountScreen> {
                       FilledButton.icon(
                         onPressed: loading ? null : () async {
                           setState(() => loading = true);
-                          try { await CloudSyncService.instance.syncLibrary(context.read<MediaProvider>().library); } finally { if (mounted) setState(() => loading = false); }
+                          try { await CloudSyncService.instance.syncLibrary(context.read<MediaProvider>().library);
+                          final remote = await CloudSyncService.instance.downloadLibrary();
+                          await context.read<MediaProvider>().mergeCloudLibrary(remote); } finally { if (mounted) setState(() => loading = false); }
                         },
                         icon: const Icon(Icons.cloud_sync),
                         label: const Text('مزامنة المكتبة الآن'),
