@@ -19,8 +19,8 @@ class AppConstants {
   static const String typeTv = 'tv';
   static const String typeAnime = 'anime';
 
-  static const String geminiModel = 'gemini-1.5-flash';
-  static const String geminiVisionModel = 'gemini-1.5-flash';
+  static const String geminiModel = 'gemini-2.5-flash';
+  static const String geminiVisionModel = 'gemini-2.5-flash';
 
   static const String dbName = 'cineverse.db';
   static const int dbVersion = 1;
