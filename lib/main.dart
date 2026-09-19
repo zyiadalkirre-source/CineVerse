@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import 'core/constants.dart';
+import 'core/theme.dart';
 import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
-import 'services/notification_service.dart';
 import 'services/cache_service.dart';
+import 'services/notification_service.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // تهيئة التخزين المحلي والإشعارات قبل تشغيل التطبيق.
+
   await CacheService.init();
   await NotificationService.init();
 
-  runApp(const MyApp());
+  runApp(const CineVerseApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class CineVerseApp extends StatelessWidget {
+  const CineVerseApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -29,16 +31,18 @@ class MyApp extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             themeMode: themeProvider.themeMode,
             locale: themeProvider.locale,
-            supportedLocales: const [Locale('ar'), Locale('en')],
-            theme: ThemeData(
-              colorSchemeSeed: Colors.deepPurple,
-              useMaterial3: true,
-              brightness: Brightness.light,
+            supportedLocales: const [
+              Locale('ar'),
+              Locale('en'),
+              Locale('fr'),
+            ],
+            theme: AppTheme.build(
+              Brightness.light,
+              const Color(AppColors.primary),
             ),
-            darkTheme: ThemeData(
-              colorSchemeSeed: Colors.deepPurple,
-              useMaterial3: true,
-              brightness: Brightness.dark,
+            darkTheme: AppTheme.build(
+              Brightness.dark,
+              const Color(AppColors.primary),
             ),
             home: const HomeScreen(),
           );
