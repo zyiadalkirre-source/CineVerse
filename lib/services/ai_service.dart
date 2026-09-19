@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../core/constants.dart';
+import '../core/api_config.dart';
 import '../models/media_item.dart';
 import '../models/chat_message.dart';
 import 'ai_models.dart';
 
 class AiService {
- GenerativeModel get model=>GenerativeModel(model:AppConstants.geminiModel,apiKey:AppConstants.geminiApiKey);
+ GenerativeModel get model=>GenerativeModel(model:AppConstants.geminiModel,apiKey:ApiConfig.geminiKey);
  void check(){if(AppConstants.geminiApiKey.trim().isEmpty)throw StateError('GEMINI_API_KEY is not configured');}
  Future<String> text(String prompt) async{check();final r=await model.generateContent([Content.text(prompt)]);return r.text?.trim()??'لم يتم الحصول على إجابة.';}
  Future<String> chat(String q,List<ChatMessage> history)=>text('You are CineVerse AI. Answer in the same language as the user. User question: $q');
