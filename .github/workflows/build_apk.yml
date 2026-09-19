@@ -6,25 +6,18 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build Release APK
     runs-on: ubuntu-latest
 
     steps:
-      # تحميل المشروع
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # إعداد Java
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: gradle
-
-      # إعداد Flutter
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -32,27 +25,44 @@ jobs:
           channel: stable
           cache: true
 
-      # التحقق من Flutter
-      - name: Flutter Doctor
-        run: flutter doctor -v
+      # The repository currently contains the Flutter source but does not
+      # contain the generated Android platform folder. Generate it in CI
+      # only when it is missing.
+      - name: Ensure Android platform exists
+        shell: bash
+        run: |
+          if [ ! -d "android" ]; then
+            flutter create . \
+              --platforms=android \
+              --project-name=cineverse \
+              --org=com.cineverse \
+              --no-pub
+          fi
 
-      # تنزيل المكتبات
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Verify Flutter
+        run: |
+          flutter --version
+          flutter doctor -v
+
       - name: Get Flutter dependencies
         run: flutter pub get
 
-      # تنظيف المشروع
-      - name: Clean Flutter project
-        run: flutter clean
-
-      # تنزيل المكتبات مرة ثانية بعد التنظيف
-      - name: Get dependencies again
-        run: flutter pub get
-
-      # بناء APK
-      - name: Build Release APK
+      - name: Build release APK
         run: flutter build apk --release
 
-      # رفع APK إلى GitHub Actions
+      - name: Verify APK exists
+        shell: bash
+        run: |
+          test -f build/app/outputs/flutter-apk/app-release.apk
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
