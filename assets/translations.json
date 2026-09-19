@@ -1,0 +1,9 @@
+{
+  "_comment":"CineVerse translations",
+  "_version":"1.0.0",
+  "genres":{
+    "ar":{"action":"أكشن","adventure":"مغامرة","animation":"رسوم متحركة","comedy":"كوميديا","crime":"جريمة","documentary":"وثائقي","drama":"دراما","family":"عائلي","fantasy":"خيال","history":"تاريخي","horror":"رعب","music":"موسيقي","mystery":"غموض","romance":"رومانسي","science_fiction":"خيال علمي","thriller":"إثارة","war":"حرب","western":"غربي","anime":"أنمي"},
+    "en":{"action":"Action","adventure":"Adventure","animation":"Animation","comedy":"Comedy","crime":"Crime","documentary":"Documentary","drama":"Drama","family":"Family","fantasy":"Fantasy","history":"History","horror":"Horror","music":"Music","mystery":"Mystery","romance":"Romance","science_fiction":"Sci-Fi","thriller":"Thriller","war":"War","western":"Western","anime":"Anime"},
+    "fr":{"action":"Action","adventure":"Aventure","animation":"Animation","comedy":"Comédie","crime":"Crime","documentary":"Documentaire","drama":"Drame","family":"Famille","fantasy":"Fantastique","history":"Histoire","horror":"Horreur","music":"Musique","mystery":"Mystère","romance":"Romance","science_fiction":"SF","thriller":"Thriller","war":"Guerre","western":"Western","anime":"Animé"}
+  }
+}
