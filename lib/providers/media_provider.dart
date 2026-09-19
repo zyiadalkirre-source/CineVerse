@@ -20,6 +20,7 @@ class MediaProvider extends ChangeNotifier {
   Future<void> setStatus(MediaItem item,String status) async=>upsert(item.copyWith(watchStatus:status));
   Future<void> setRating(MediaItem item,double? rating) async=>upsert(item.copyWith(userRating:rating));
   Future<void> setNotes(MediaItem item,String notes) async=>upsert(item.copyWith(notes:notes));
+  Future<void> mergeCloudLibrary(List<MediaItem> items) async { for (final item in items) { final i=_library.indexWhere((x)=>x.id==item.id&&x.mediaType==item.mediaType); if(i>=0)_library[i]=item; else _library.add(item); await database.saveMedia(item); } notifyListeners(); }
   Future<void> clearLibrary() async{_library=[];await database.deleteLibrary();notifyListeners();}
   MediaItem? getById(int id,String type){for(final x in _library){if(x.id==id&&x.mediaType==type)return x;}return null;}
   Future<List<MediaItem>> search(String q,String lang) async{error=null;final r=<MediaItem>[];try{r.addAll(await tmdb.search(q,lang:lang));}catch(e){error=e.toString();}try{r.addAll(await jikan.searchAnime(q));}catch(_){}await database.addSearch(q);return r;}
