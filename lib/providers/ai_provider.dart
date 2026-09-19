@@ -77,4 +77,14 @@ class AiProvider extends ChangeNotifier {
     final seen = <String>{};
     return out.where((x) => seen.add('${x.mediaType}:${x.id}')).take(20).toList();
   }
+  Future<String> analyzeRatings(String title,{String imdb='',String rottenTomatoes='',String metacritic=''}) => service.analyzeRatings(title,imdb:imdb,rottenTomatoes:rottenTomatoes,metacritic:metacritic);
+  Future<String> familyCheck(MediaItem i) => service.familyCheck(i);
+  Future<String> compare(MediaItem a,MediaItem b) => service.compare(a,b);
+  Future<String> comfortZone(List<MediaItem> i) => service.comfortZone(i);
+  Future<String> themedList(String theme) => service.themedList(theme);
+  Future<String> adaptationCompare(String source,String adaptation) => service.adaptationCompare(source,adaptation);
+  Future<String> identifyFromDescription(String d) => service.identifyFromDescription(d);
+  Future<String> autoTags(MediaItem i) => service.autoTags(i);
+  Future<String> screenshotIdentify(String d) => service.screenshotIdentify(d);
+  Future<String> generateQuiz(MediaItem i) => service.generateQuiz(i);
 }
