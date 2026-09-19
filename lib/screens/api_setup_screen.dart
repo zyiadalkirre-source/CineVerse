@@ -13,10 +13,20 @@ class _ApiSetupScreenState extends State<ApiSetupScreen> {
   @override void dispose() { tmdb.dispose(); gemini.dispose(); super.dispose(); }
   Future<void> save() async {
     setState(() => saving = true);
-    await ApiConfig.save(tmdb: tmdb.text, gemini: gemini.text);
-    if (!mounted) return;
-    setState(() => saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ مفاتيح API بأمان')));
+    try {
+      await ApiConfig.save(tmdb: tmdb.text, gemini: gemini.text);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم حفظ مفاتيح API بأمان')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذر حفظ المفاتيح: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
   }
   Widget field(String label, TextEditingController c) => Padding(
     padding: const EdgeInsets.only(bottom: 14),
