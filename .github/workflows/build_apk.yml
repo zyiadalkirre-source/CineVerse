@@ -50,14 +50,14 @@ jobs:
           settings_gradle = root / "settings.gradle"
           app_gradle = root / "app" / "build.gradle"
 
-          # Kotlin 2.3.21 requires Android Gradle Plugin 8.2.2+.
+          # Kotlin 2.3.21 requires a modern Android Gradle Plugin; use the same toolchain as flutter_litert_lm.
           # Flutter 3.22.2 can generate AGP 7.3.0, so patch the generated
           # Android project and wrapper to a compatible toolchain.
           wrapper_props = root / "gradle" / "wrapper" / "gradle-wrapper.properties"
 
           kotlin_version = "2.3.21"
-          agp_version = "8.2.2"
-          gradle_version = "8.2"
+          agp_version = "8.11.1"
+          gradle_version = "8.13"
 
           # Flutter 3.22 can generate the Kotlin version in either
           # settings.gradle or the legacy root build.gradle depending on the
@@ -233,6 +233,31 @@ jobs:
               raise SystemExit('Unpatched speech_to_text Flutter Gradle references: ' + ', '.join(remaining))
 
           print('Patched', path)
+          PY
+
+      - name: Align LiteRT-LM Android Gradle toolchain
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import glob
+
+          kotlin_version = "2.3.21"
+          agp_version = "8.11.1"
+          matches = glob.glob('/home/runner/.pub-cache/hosted/pub.dev/flutter_litert_lm-0.3.0/android/build.gradle.kts')
+          if not matches:
+              raise SystemExit('flutter_litert_lm 0.3.0 Android build.gradle.kts was not found')
+
+          path = Path(matches[0])
+          text = path.read_text()
+          text = text.replace('val kotlinVersion = "2.2.20"', f'val kotlinVersion = "{kotlin_version}"')
+          text = text.replace('classpath("com.android.tools.build:gradle:8.11.1")', f'classpath("com.android.tools.build:gradle:{agp_version}")')
+          path.write_text(text)
+
+          verify = path.read_text()
+          if kotlin_version not in verify or agp_version not in verify:
+              raise SystemExit('LiteRT-LM Gradle toolchain was not patched correctly')
+          print('Patched', path, 'to Kotlin', kotlin_version, 'and AGP', agp_version)
           PY
 
       - name: Analyze Dart code
