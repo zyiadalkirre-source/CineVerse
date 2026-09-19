@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../core/constants.dart';
+import '../core/api_config.dart';
 import '../models/media_item.dart';
 
 class TmdbService {
-  final String _apiKey = AppConstants.tmdbApiKey;
+  String get _apiKey => ApiConfig.tmdbKey;
   final String _base = AppConstants.tmdbBaseUrl;
 
   void _checkApiKey() {
