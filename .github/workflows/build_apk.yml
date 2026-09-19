@@ -100,6 +100,27 @@ jobs:
           print("Android Gradle project prepared with Kotlin", kotlin_version)
           PY
 
+          # LiteRT-LM 0.3.0 ships an AAR containing Java 21 bytecode.
+          # Jetifier bundled with older Android toolchains cannot transform class
+          # file major version 65, and the Flutter/AndroidX project does not need
+          # Jetifier for these dependencies. Keep AndroidX enabled and disable
+          # Jetifier before resolving plugin dependencies.
+          python3 - <<'PY'
+          from pathlib import Path
+
+          props = Path("android/gradle.properties")
+          existing = props.read_text() if props.exists() else ""
+          lines = [line for line in existing.splitlines()
+                   if not line.startswith("android.useAndroidX=")
+                   and not line.startswith("android.enableJetifier=")]
+          lines.extend([
+              "android.useAndroidX=true",
+              "android.enableJetifier=false",
+          ])
+          props.write_text("\n".join(lines) + "\n")
+          print("AndroidX enabled; Jetifier disabled")
+          PY
+
           echo "===== Android Gradle configuration ====="
           sed -n '1,240p' android/settings.gradle
           sed -n '1,240p' android/build.gradle
