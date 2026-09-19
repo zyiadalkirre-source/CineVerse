@@ -21,11 +21,14 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
+          flutter-version: '3.22.2'
           channel: 'stable'
 
-      - name: Create Android Structure
-        run: flutter create . --platforms=android --project-name=cineverse
+      - name: Clean and Create Project Structure
+        run: |
+          flutter create . --platforms=android --project-name=cineverse
+          cd android
+          ./gradlew clean
 
       - name: Get Dependencies
         run: flutter pub get
