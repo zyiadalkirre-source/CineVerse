@@ -19,4 +19,62 @@ class AiService {
  Future<MoodResult> classifyMood(String q) async{final raw=await text('Return JSON only with detectedMood,confidence,explanation,genres,avoidGenres,movies,anime. Mood: '+q);try{final j=jsonDecode(raw);return MoodResult(detectedMood:'${j['detectedMood']??''}',confidence:(j['confidence'] as num?)?.toDouble()??0,explanation:'${j['explanation']??''}',genres:List<String>.from(j['genres']??[]),avoidGenres:List<String>.from(j['avoidGenres']??[]),movies:List<String>.from(j['movies']??[]),anime:List<String>.from(j['anime']??[]));}catch(_){return MoodResult.empty();}}
  Future<PosterAnalysis> analyzePoster(Uint8List bytes) async{check();check(); final m=GenerativeModel(model:AppConstants.geminiVisionModel,apiKey:ApiConfig.geminiKey);final r=await m.generateContent([Content.multi([DataPart('image/jpeg',bytes),TextPart('Return JSON only with type,genres,audience,mood,colors,colorMeaning,symbols,verdict. Analyze this poster.')])]);final raw=r.text??'';try{final j=jsonDecode(raw);return PosterAnalysis(type:'${j['type']??''}',genres:List<String>.from(j['genres']??[]),audience:'${j['audience']??''}',mood:'${j['mood']??''}',colors:List<String>.from(j['colors']??[]),colorMeaning:'${j['colorMeaning']??''}',symbols:List<String>.from(j['symbols']??[]),verdict:'${j['verdict']??''}');}catch(_){return PosterAnalysis.empty();}}
  Future<TasteAnalysis> analyzeTaste(List<MediaItem> items) async{final data=items.take(30).map((x)=>x.title+'|'+x.genres.join(',')+'|'+(x.userRating?.toString()??'')).join('\n');final raw=await text('Return JSON only with archetype,personality,patterns,strengths,blindSpots,topGenres,avoidedGenres,recommendation. Library:\n'+data);try{final j=jsonDecode(raw);return TasteAnalysis(archetype:'${j['archetype']??''}',personality:'${j['personality']??''}',patterns:List<String>.from(j['patterns']??[]),strengths:'${j['strengths']??''}',blindSpots:'${j['blindSpots']??''}',topGenres:List<String>.from(j['topGenres']??[]),avoidedGenres:List<String>.from(j['avoidedGenres']??[]),recommendation:'${j['recommendation']??''}');}catch(_){return TasteAnalysis.empty();}}
-}
+  Future<String> analyzeRatings(
+    String title, {
+    String imdb = '',
+    String rottenTomatoes = '',
+    String metacritic = '',
+  }) => text(
+    'Analyze the supplied ratings for "$title". '
+    'IMDb: $imdb. Rotten Tomatoes: $rottenTomatoes. Metacritic: $metacritic. '
+    'Do not invent missing ratings. Explain differences and limitations.',
+  );
+
+  Future<String> familyCheck(MediaItem item) => text(
+    'Provide a family-content suitability overview for "${item.title}". '
+    'Use only the information supplied here and clearly say when information is unknown. '
+    'Overview: ${item.overview}. Genres: ${item.genres.join(', ')}.',
+  );
+
+  Future<String> compare(MediaItem a, MediaItem b) => text(
+    'Compare "${a.title}" and "${b.title}" factually across premise, genre, tone, '
+    'audience, strengths and notable differences. Do not invent missing facts. '
+    'First: ${a.overview}. Second: ${b.overview}.',
+  );
+
+  Future<String> comfortZone(List<MediaItem> items) => text(
+    'Analyze this viewing library and describe the user comfort zone: '
+    '${items.take(30).map((i) => '${i.title} | ${i.genres.join(', ')}').join('\\n')}',
+  );
+
+  Future<String> themedList(String theme) => text(
+    'Create a themed movie, TV and anime list for: $theme. '
+    'Return concise titles with one-line reasons. Clearly mark uncertain items.',
+  );
+
+  Future<String> adaptationCompare(String sourceWork, String adaptation) => text(
+    'Compare the source work "$sourceWork" with its adaptation "$adaptation". '
+    'Separate known facts from uncertainty and avoid inventing plot details.',
+  );
+
+  Future<String> identifyFromDescription(String description) => text(
+    'Identify possible movie, TV or anime titles from this incomplete description: '
+    '$description. Give up to 5 possibilities and explain uncertainty.',
+  );
+
+  Future<String> autoTags(MediaItem item) => text(
+    'Generate useful content tags for "${item.title}" from this information: '
+    '${item.overview}. Genres: ${item.genres.join(', ')}. '
+    'Return concise comma-separated tags and do not invent specific facts.',
+  );
+
+  Future<String> screenshotIdentify(String description) => text(
+    'Help identify a movie, TV show or anime from this screenshot description: '
+    '$description. Give possible matches and uncertainty.',
+  );
+
+  Future<String> generateQuiz(MediaItem item) => text(
+    'Create a short spoiler-aware quiz about "${item.title}" using only supplied information. '
+    'If the supplied information is insufficient, say so instead of inventing facts. '
+    'Overview: ${item.overview}.',
+  );}
