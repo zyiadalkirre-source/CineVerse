@@ -68,6 +68,15 @@ jobs:
               text = text.replace("com.android.tools.build:gradle:7.4.2", f"com.android.tools.build:gradle:{agp_version}")
               build_gradle.write_text(text)
 
+          # New Flutter templates declare AGP in settings.gradle via the plugins DSL.
+          if settings_gradle.exists():
+              text = settings_gradle.read_text()
+              text = text.replace('id "com.android.application" version "7.3.0"', f'id "com.android.application" version "{agp_version}"')
+              text = text.replace('id "com.android.application" version "7.4.2"', f'id "com.android.application" version "{agp_version}"')
+              text = text.replace("id 'com.android.application' version '7.3.0'", f"id 'com.android.application' version '{agp_version}'")
+              text = text.replace("id 'com.android.application' version '7.4.2'", f"id 'com.android.application' version '{agp_version}'")
+              settings_gradle.write_text(text)
+
           if wrapper_props.exists():
               text = wrapper_props.read_text()
               import re
@@ -115,7 +124,12 @@ jobs:
 
           if kotlin_version not in combined:
               raise SystemExit("Kotlin 2.3.21 was not applied to the Android project")
-          if f"com.android.tools.build:gradle:{agp_version}" not in combined:
+          agp_applied = (
+              f"com.android.tools.build:gradle:{agp_version}" in combined
+              or f'id "com.android.application" version "{agp_version}"' in combined
+              or f"id 'com.android.application' version '{agp_version}'" in combined
+          )
+          if not agp_applied:
               raise SystemExit(f"AGP {agp_version} was not applied to the Android project")
 
           print("Android Gradle project prepared with Kotlin", kotlin_version, "and AGP", agp_version)
