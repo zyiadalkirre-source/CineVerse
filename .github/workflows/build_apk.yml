@@ -66,6 +66,7 @@ jobs:
 
           if app_gradle.exists():
               text = app_gradle.read_text()
+              text = text.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
               text = text.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 24")
               text = text.replace("details.useVersion \"1.8.22\"", f'details.useVersion "{kotlin_version}"')
               text = text.replace("details.useVersion \"1.7.10\"", f'details.useVersion "{kotlin_version}"')
@@ -101,6 +102,12 @@ jobs:
           sed -n '1,300p' android/app/build.gradle
           echo "===== Gradle wrapper ====="
           grep -n "distributionUrl" android/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          yes | sdkmanager "platforms;android-36"
+          sdkmanager --list_installed | grep -E "platforms;android-36" || true
 
       - name: Set up Java
         uses: actions/setup-java@v5
