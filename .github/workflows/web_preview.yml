@@ -24,7 +24,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.29.3"
+          flutter-version: "3.47.5"
           channel: stable
           cache: true
 
@@ -37,6 +37,9 @@ jobs:
             flutter create . --project-name cineverse --platforms=web --no-pub
           fi
           rm -f test/widget_test.dart
+
+      - name: Prepare SQLite Web assets
+        run: dart run sqflite_common_ffi_web:setup --force
 
       - name: Analyze Dart code
         run: flutter analyze --no-fatal-infos
