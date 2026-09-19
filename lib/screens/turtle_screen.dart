@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_litert_lm/flutter_litert_lm.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/turtle_brain.dart';
 
