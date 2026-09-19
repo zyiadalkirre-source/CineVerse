@@ -9,6 +9,7 @@ import '../services/tmdb_service.dart';
 import '../services/jikan_service.dart';
 
 class AiProvider extends ChangeNotifier {
+  AiProvider() { loadChat(); }
   final AiService service = AiService();
   final DatabaseService database = DatabaseService.instance;
   final TmdbService tmdb = TmdbService();
@@ -44,7 +45,7 @@ class AiProvider extends ChangeNotifier {
     }
   }
 
-  void clearChat() { messages.clear(); database.clearChat(); notifyListeners(); }
+  Future<void> clearChat() async { messages.clear(); await database.clearChat(); notifyListeners(); }
   Future<AiSummary> summarize(MediaItem i) => service.summarize(i);
   Future<WorthWatching> worthWatching(MediaItem i) => service.worthWatching(i);
   Future<String> explainEnding(MediaItem i) => service.explainEnding(i);
