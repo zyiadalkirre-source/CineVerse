@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
 import 'services/notification_service.dart';
+import 'services/cache_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // تهيئة خدمة الإشعارات المحلية
+  // تهيئة التخزين المحلي والإشعارات قبل تشغيل التطبيق.
+  await CacheService.init();
   await NotificationService.init();
 
   runApp(const MyApp());
@@ -26,6 +28,8 @@ class MyApp extends StatelessWidget {
             title: 'CineVerse',
             debugShowCheckedModeBanner: false,
             themeMode: themeProvider.themeMode,
+            locale: themeProvider.locale,
+            supportedLocales: const [Locale('ar'), Locale('en')],
             theme: ThemeData(
               colorSchemeSeed: Colors.deepPurple,
               useMaterial3: true,
