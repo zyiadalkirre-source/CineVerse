@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import '../services/cloud_sync_service.dart';
+import 'package:provider/provider.dart';
+import '../providers/media_provider.dart';
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -70,7 +72,7 @@ class _AccountScreenState extends State<AccountScreen> {
                       FilledButton.icon(
                         onPressed: loading ? null : () async {
                           setState(() => loading = true);
-                          try { await CloudSyncService.instance.syncLibrary(const []); } finally { if (mounted) setState(() => loading = false); }
+                          try { await CloudSyncService.instance.syncLibrary(context.read<MediaProvider>().library); } finally { if (mounted) setState(() => loading = false); }
                         },
                         icon: const Icon(Icons.cloud_sync),
                         label: const Text('مزامنة المكتبة الآن'),
