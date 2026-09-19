@@ -21,7 +21,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.29.3"
+          flutter-version: "3.47.5"
           channel: stable
           cache: true
 
@@ -46,9 +46,9 @@ jobs:
           from pathlib import Path
 
           root = Path("android")
-          build_gradle = root / "build.gradle"
-          settings_gradle = root / "settings.gradle"
-          app_gradle = root / "app" / "build.gradle"
+          build_gradle = next((p for p in [root / "build.gradle", root / "build.gradle.kts"] if p.exists()), root / "build.gradle")
+          settings_gradle = next((p for p in [root / "settings.gradle", root / "settings.gradle.kts"] if p.exists()), root / "settings.gradle")
+          app_gradle = next((p for p in [root / "app" / "build.gradle", root / "app" / "build.gradle.kts"] if p.exists()), root / "app" / "build.gradle")
 
           # Kotlin 2.3.21 requires a modern Android Gradle Plugin; use the same toolchain as flutter_litert_lm.
           # Flutter 3.22.2 can generate AGP 7.3.0, so patch the generated
@@ -71,10 +71,9 @@ jobs:
           # New Flutter templates declare AGP in settings.gradle via the plugins DSL.
           if settings_gradle.exists():
               text = settings_gradle.read_text()
-              text = text.replace('id "com.android.application" version "7.3.0"', f'id "com.android.application" version "{agp_version}"')
-              text = text.replace('id "com.android.application" version "7.4.2"', f'id "com.android.application" version "{agp_version}"')
-              text = text.replace("id 'com.android.application' version '7.3.0'", f"id 'com.android.application' version '{agp_version}'")
-              text = text.replace("id 'com.android.application' version '7.4.2'", f"id 'com.android.application' version '{agp_version}'")
+              import re
+              text = re.sub(r'(id\\s*\\(?"com\\.android\\.application"\\)?\\s+version\\s+")([0-9.]+)(")', rf'\\g<1>{agp_version}\\g<3>', text)
+              text = re.sub(r"(id\\s*\\(?" + "'com\\.android\\.application'" + r"\\)?\\s+version\\s+')" + r"([0-9.]+)(')" + r"", rf"\\g<1>{agp_version}\\g<3>", text)
               settings_gradle.write_text(text)
 
           if wrapper_props.exists():
@@ -86,6 +85,9 @@ jobs:
           for path in (settings_gradle, build_gradle):
               if path.exists():
                   text = path.read_text()
+                  import re
+                  text = re.sub(r'(org\\.jetbrains\\.kotlin\\.android[^\\n]*?version\\s+")([0-9.]+)(")', rf'\\g<1>{kotlin_version}\\g<3>', text)
+                  text = re.sub(r'(kotlin\\s*\\(?"android"\\)?\\s+version\\s+")([0-9.]+)(")', rf'\\g<1>{kotlin_version}\\g<3>', text)
                   text = text.replace('"1.7.10"', f'"{kotlin_version}"')
                   text = text.replace("'1.7.10'", f"'{kotlin_version}'")
                   text = text.replace('"1.8.22"', f'"{kotlin_version}"')
@@ -94,7 +96,21 @@ jobs:
 
           if app_gradle.exists():
               text = app_gradle.read_text()
-              text = text.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
+              if app_gradle.suffix == ".kts":
+                  text = text.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
+                  text = text.replace("minSdk = flutter.minSdkVersion", "minSdk = 24")
+                  text = text.replace("targetSdk = flutter.targetSdkVersion", "targetSdk = 36")
+                  text = text.replace("ndkVersion = flutter.ndkVersion", 'ndkVersion = "27.0.12077973"')
+                  text = text.replace("sourceCompatibility = JavaVersion.VERSION_11", "sourceCompatibility = JavaVersion.VERSION_17")
+                  text = text.replace("targetCompatibility = JavaVersion.VERSION_11", "targetCompatibility = JavaVersion.VERSION_17")
+                  text = text.replace("jvmTarget = JavaVersion.VERSION_11.toString()", "jvmTarget = JavaVersion.VERSION_17.toString()")
+                  if "isCoreLibraryDesugaringEnabled = true" not in text:
+                      text = text.replace("compileOptions {", "compileOptions {\n        isCoreLibraryDesugaringEnabled = true", 1)
+                  if "coreLibraryDesugaring(" not in text:
+                      text = text.replace("dependencies {", "dependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")", 1)
+                  app_gradle.write_text(text)
+              else:
+                  text = text.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
               text = text.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
               text = text.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 24")
               text = text.replace("minSdk = flutter.minSdkVersion", "minSdk = 24")
@@ -191,9 +207,9 @@ jobs:
           PY
 
           echo "===== Android Gradle configuration ====="
-          sed -n '1,240p' android/settings.gradle
-          sed -n '1,240p' android/build.gradle
-          sed -n '1,300p' android/app/build.gradle
+          for f in android/settings.gradle android/settings.gradle.kts; do [ -f "$f" ] && sed -n "1,240p" "$f"; done
+          for f in android/build.gradle android/build.gradle.kts; do [ -f "$f" ] && sed -n "1,240p" "$f"; done
+          for f in android/app/build.gradle android/app/build.gradle.kts; do [ -f "$f" ] && sed -n "1,300p" "$f"; done
           echo "===== Gradle wrapper ====="
           grep -n "distributionUrl" android/gradle/wrapper/gradle-wrapper.properties
 
