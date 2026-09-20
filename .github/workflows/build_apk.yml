@@ -205,7 +205,7 @@ jobs:
               raise SystemExit("android/app/src/main/AndroidManifest.xml was not generated")
 
           if permission not in text:
-              match = re.search(r"<manifest\\b[^>]*>", text, flags=re.S)
+              match = re.search(r"<manifest\b[^>]*>", text, flags=re.S)
               if not match:
                   raise SystemExit("Unable to locate the opening <manifest> tag")
               opening_tag = match.group(0)
