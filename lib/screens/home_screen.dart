@@ -48,6 +48,7 @@ class _Library extends StatefulWidget {
 }
 class _LibraryState extends State<_Library> {
   String filter='all';
+  bool _showWelcomeBanner = true;
   List<MediaItem> _filtered(List<MediaItem> items){
     final r=items.where((x)=>filter=='movie'?x.mediaType=='movie':filter=='tv'?x.mediaType=='tv':filter=='favorite'?x.isFavorite:true).toList();
     r.sort((a,b){if(a.lastWatchedSeconds>0&&b.lastWatchedSeconds==0)return -1;if(a.lastWatchedSeconds==0&&b.lastWatchedSeconds>0)return 1;return a.title.toLowerCase().compareTo(b.title.toLowerCase());});return r;
@@ -57,25 +58,42 @@ class _LibraryState extends State<_Library> {
     final provider = context.watch<MediaProvider>();
     final theme = Theme.of(context);
     return CustomScrollView(slivers: [
-      SliverToBoxAdapter(child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 12, 16, 18), padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [theme.colorScheme.primary, theme.colorScheme.secondary]),
-          boxShadow: [BoxShadow(color: theme.colorScheme.primary.withOpacity(.22), blurRadius: 24, offset: const Offset(0, 10))],
-        ),
-        child: Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('عالمك السينمائي', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900, color: Colors.white)),
-            const SizedBox(height: 8),
-            Text(provider.library.isEmpty ? 'اكتشف، احفظ، وتابع كل ما تحب.' : provider.library.length.toString() + ' عمل محفوظ في مكتبتك', style: const TextStyle(color: Colors.white70, fontSize: 14)),
-            const SizedBox(height: 18),
-            FilledButton.tonalIcon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())), icon: const Icon(Icons.explore), label: const Text('اكتشف الآن')),
-          ])),
-          const SizedBox(width: 10),
-          const Icon(Icons.movie_filter_rounded, size: 82, color: Colors.white24),
-        ]),
-      )),
+      if (_showWelcomeBanner)
+        SliverToBoxAdapter(child: Container(
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 18), padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [theme.colorScheme.primary, theme.colorScheme.secondary]),
+            boxShadow: [BoxShadow(color: theme.colorScheme.primary.withOpacity(.22), blurRadius: 24, offset: const Offset(0, 10))],
+          ),
+          child: Row(children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('عالمك السينمائي', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900, color: Colors.white)),
+              const SizedBox(height: 8),
+              Text(provider.library.isEmpty ? 'اكتشف، احفظ، وتابع كل ما تحب.' : provider.library.length.toString() + ' عمل محفوظ في مكتبتك', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+              const SizedBox(height: 18),
+              FilledButton.tonalIcon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())), icon: const Icon(Icons.explore), label: const Text('اكتشف الآن')),
+            ])),
+            const SizedBox(width: 10),
+            Stack(children: [
+              const Icon(Icons.movie_filter_rounded, size: 82, color: Colors.white24),
+              Positioned(
+                top: 0, left: 0,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => setState(() => _showWelcomeBanner = false),
+                    borderRadius: BorderRadius.circular(20),
+                    child: const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Icon(Icons.close, color: Colors.white, size: 22),
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+          ]),
+        )),
       if (provider.library.isNotEmpty) ...[
         SliverToBoxAdapter(child: Padding(padding:const EdgeInsets.symmetric(horizontal:14,vertical:4),child:SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[_chip('الكل','all'),_chip('أفلام','movie'),_chip('مسلسلات','tv'),_chip('المفضلة','favorite')])))),
         if(filter=='all'&&provider.library.any((x)=>x.lastWatchedSeconds>0))
