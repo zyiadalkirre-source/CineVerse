@@ -7,12 +7,14 @@ class CustomDrawer extends StatelessWidget {
     this.avatarUrl,
     this.selectedIndex = 0,
     this.onItemSelected,
+    this.onNotifications,
   });
 
   final String userName;
   final String? avatarUrl;
   final int selectedIndex;
   final ValueChanged<int>? onItemSelected;
+  final VoidCallback? onNotifications;
 
   static const _items = <({
     IconData icon,
@@ -55,7 +57,7 @@ class CustomDrawer extends StatelessWidget {
                       children: [
                         IconButton(
                           tooltip: 'الإشعارات',
-                          onPressed: () {},
+                          onPressed: onNotifications,
                           icon: const Icon(Icons.notifications_none_rounded),
                         ),
                         const Spacer(),
