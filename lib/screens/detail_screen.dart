@@ -63,7 +63,17 @@ class _DetailScreenState extends State<DetailScreen> {
           ])),
         ]),
         const SizedBox(height:16),
-        Row(children:[_statusButton('تمت',AppConstants.statusWatched),_statusButton('أشاهد',AppConstants.statusWatching),_statusButton('قائمة',AppConstants.statusNotWatched)]),
+        Row(children:[
+          _statusButton('تمت',AppConstants.statusWatched),
+          _statusButton('أشاهد',AppConstants.statusWatching),
+          _statusButton('قائمة',AppConstants.statusNotWatched),
+        ]),
+        const SizedBox(height:8),
+        SizedBox(width:double.infinity,child:OutlinedButton.icon(
+          onPressed:() async { await context.read<MediaProvider>().toggleFavorite(item); if(mounted)setState(()=>item=item.copyWith(isFavorite:!item.isFavorite)); },
+          icon:Icon(item.isFavorite?Icons.favorite:Icons.favorite_border),
+          label:Text(item.isFavorite?'إزالة من المفضلة':'إضافة للمفضلة'),
+        )),
         const SizedBox(height:18),
         Text('القصة',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold)),
         const SizedBox(height:6),Text(item.overview.isEmpty?'لا يوجد وصف متاح':item.overview),
@@ -86,7 +96,7 @@ class _DetailScreenState extends State<DetailScreen> {
       ]))),
     ]));
   }
-  void _openEpisode(Map<String,dynamic> episode){final url=_episodeWatchUrl(episode);Navigator.of(context).push(MaterialPageRoute(builder:(_)=>WatchScreen(title:item.title,episodeName:(episode['name']??'حلقة').toString(),season:season,episode:(episode['episode_number'] as num?)?.toInt()??0,videoUrl:url)));}
+  void _openEpisode(Map<String,dynamic> episode){final url=_episodeWatchUrl(episode);Navigator.of(context).push(MaterialPageRoute(builder:(_)=>WatchScreen(item:item, title:item.title,episodeName:(episode['name']??'حلقة').toString(),season:season,episode:(episode['episode_number'] as num?)?.toInt()??0,videoUrl:url)));}
   String? _episodeWatchUrl(Map<String,dynamic> episode){for(final key in const ['watch_url','video_url','stream_url','playback_url']){final value=episode[key]?.toString().trim();if(value!=null&&value.isNotEmpty)return value;}return null;}
   String _episodeRating(Map<String,dynamic> e){final value=e['vote_average'];return value is num?value.toStringAsFixed(1):'—';}
   Widget _statusButton(String l,String s){
