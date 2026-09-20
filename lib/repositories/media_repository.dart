@@ -536,7 +536,7 @@ class MediaRepository {
   String _detailsKey(MediaItem item) => 'details:' + item.mediaType + ':' + item.id.toString();
 
   String _normalizeQuery(String query) =>
-      query.trim().replaceAll(RegExp(r'\\s+'), ' ').toLowerCase();
+      query.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
 
   List<MediaItem> _deduplicate(List<MediaItem> items) {
     final unique = <String, MediaItem>{};
