@@ -67,7 +67,7 @@ class _DetailScreenState extends State<DetailScreen> {
           const SizedBox(height:22),Text('الحلقات',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold)),
           DropdownButton<int>(value:season,items:List.generate(item.seasons!, (i)=>DropdownMenuItem(value:i+1,child:Text('الموسم '+(i+1).toString()))),onChanged:(v){if(v!=null){setState(()=>season=v);_loadEpisodes(v);}}),
           if(episodesLoading)const LinearProgressIndicator(),
-          ...episodes.map((e)=>Card(child:ListTile(leading:CircleAvatar(child:Text((e['episode_number']??'').toString())),title:Text((e['name']??'حلقة').toString()),subtitle:Text('التقييم: '+((e['vote_average'] as num?)?.toStringAsFixed(1)??'—')+' • '+(e['air_date']??'—').toString()),))),
+          ...episodes.map((e)=>Card(child:ListTile(leading:CircleAvatar(child:Text((e['episode_number']??'').toString())),title:Text((e['name']??'حلقة').toString()),subtitle:Text('التقييم: '+_episodeRating(e)+' • '+(e['air_date']??'—').toString()),))),
         ],
         const SizedBox(height:16),
         Wrap(spacing:8,children:[ElevatedButton.icon(onPressed:_note,icon:const Icon(Icons.note_add),label:const Text('ملاحظة')),ElevatedButton.icon(onPressed:loading?null:_ai,icon:const Icon(Icons.auto_awesome),label:const Text('تحليل AI')),if(item.trailerKey!=null)IconButton(onPressed:()=>launchUrl(Uri.parse('https://www.youtube.com/watch?v='+item.trailerKey!)),icon:const Icon(Icons.play_circle))]),
@@ -75,5 +75,6 @@ class _DetailScreenState extends State<DetailScreen> {
       ]))),
     ]));
   }
+  String _episodeRating(Map<String,dynamic> e){final value=e['vote_average'];return value is num?value.toStringAsFixed(1):'—';}
   Widget _statusButton(String l,String s)=>Expanded(child:Padding(padding:const EdgeInsets.only(right:4),child:OutlinedButton(onPressed:()=>_status(s),child:Text(l))));
 }
