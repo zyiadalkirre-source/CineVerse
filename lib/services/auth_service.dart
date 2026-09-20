@@ -65,8 +65,10 @@ class AuthService {
         return 'إعداد Google Sign-In غير مكتمل. تحقق من google-services.json وOAuth.';
       case GoogleSignInExceptionCode.providerConfigurationError:
         return 'إعداد مزود Google غير صحيح في المشروع.';
-      case GoogleSignInExceptionCode.networkError:
-        return 'تعذر الاتصال بخدمات Google. تحقق من الإنترنت.';
+      case GoogleSignInExceptionCode.uiUnavailable:
+        return 'تعذر فتح نافذة تسجيل الدخول. أعد المحاولة من داخل التطبيق.';
+      case GoogleSignInExceptionCode.interrupted:
+        return 'تمت مقاطعة تسجيل الدخول. أعد المحاولة.';
       default:
         return 'تعذر تسجيل الدخول باستخدام Google. رمز الخطأ: $code';
     }
