@@ -6,6 +6,7 @@ import '../models/media_item.dart';
 import '../models/watch_provider.dart';
 import '../providers/media_provider.dart';
 import '../providers/ai_provider.dart';
+import '../services/ai_service.dart';
 
 class DetailScreen extends StatefulWidget {
   final MediaItem item;
@@ -55,7 +56,7 @@ class _DetailScreenState extends State<DetailScreen> {
     if (mounted) setState(() => item = item.copyWith(watchStatus: s));
   }
   Future<void> _note()async{final c=TextEditingController(text:item.notes);final ok=await showDialog<bool>(context:context,builder:(_)=>AlertDialog(title:const Text('ملاحظتي'),content:TextField(controller:c,maxLines:5),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('إلغاء')),ElevatedButton(onPressed:()=>Navigator.pop(context,true),child:const Text('حفظ'))]));if(ok==true){await context.read<MediaProvider>().setNotes(item,c.text);if(mounted)setState(()=>item=item.copyWith(notes:c.text));}c.dispose();}
-  Future<void> _ai()async{setState(()=>loading=true);try{final x=await context.read<AiProvider>().summarize(item);if(mounted)showDialog(context:context,builder:(_)=>AlertDialog(title:const Text('ملخص AI'),content:SingleChildScrollView(child:Text(x.summary)),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('إغلاق'))]));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}finally{if(mounted)setState(()=>loading=false);}}
+  Future<void> _ai()async{setState(()=>loading=true);try{final x=await context.read<AiProvider>().summarize(item);if(mounted)showDialog(context:context,builder:(_)=>AlertDialog(title:const Text('ملخص AI'),content:SingleChildScrollView(child:Text(x.summary)),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('إغلاق'))]));}on AiServiceException catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.message)));}catch(_){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('حدث خطأ أثناء تحليل العمل بالذكاء الاصطناعي. حاول مرة أخرى.')));}finally{if(mounted)setState(()=>loading=false);}}
   @override Widget build(BuildContext context){
     final tv=item.mediaType=='tv';
     return Scaffold(body:CustomScrollView(slivers:[
