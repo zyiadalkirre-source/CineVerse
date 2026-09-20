@@ -29,7 +29,14 @@ class _WatchScreenState extends State<WatchScreen> {
   @override void initState() { super.initState(); _prepare(); }
   Future<void> _prepare() async {
     _prefs = await SharedPreferences.getInstance();
-    final saved = widget.item.lastWatchedSeconds > 0 ? widget.item.lastWatchedSeconds : (_prefs?.getInt(_progressKey) ?? 0);
+    final episodeSaved = await context.read<MediaProvider>().getEpisodeProgress(
+      item: widget.item,
+      season: widget.season,
+      episode: widget.episode,
+    );
+    final saved = episodeSaved?['position_seconds'] is int
+        ? episodeSaved!['position_seconds'] as int
+        : (_prefs?.getInt(_progressKey) ?? (widget.item.lastWatchedSeason == widget.season && widget.item.lastWatchedEpisode == widget.episode ? widget.item.lastWatchedSeconds : 0));
     if (widget.videoUrl == null || widget.videoUrl!.trim().isEmpty) { if (mounted) setState(() => _error = 'لا يوجد مصدر مشاهدة فعلي لهذه الحلقة حالياً.'); return; }
     final uri = Uri.tryParse(widget.videoUrl!);
     if (uri == null || !uri.hasScheme) { if (mounted) setState(() => _error = 'رابط المشاهدة غير صالح.'); return; }
@@ -61,6 +68,7 @@ class _WatchScreenState extends State<WatchScreen> {
           season: widget.season,
           episode: widget.episode,
           episodeName: widget.episodeName,
+          durationSeconds: c.value.duration.inSeconds,
         );
       }
     }
