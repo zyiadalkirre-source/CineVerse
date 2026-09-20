@@ -37,7 +37,18 @@ class MediaProvider extends ChangeNotifier {
 
   Future<void> setStatus(MediaItem item, String status) async => upsert(item.copyWith(watchStatus: status));
   Future<void> toggleFavorite(MediaItem item) async => upsert(item.copyWith(isFavorite: !item.isFavorite));
-  Future<void> saveWatchProgress(MediaItem item, {required int seconds, int? season, int? episode, String? episodeName}) async {
+  Future<void> saveWatchProgress(MediaItem item, {required int seconds, int? season, int? episode, String? episodeName, int durationSeconds = 0}) async {
+    if (season != null && episode != null) {
+      await database.saveEpisodeProgress(
+        mediaId: item.id,
+        mediaType: item.mediaType,
+        season: season,
+        episode: episode,
+        positionSeconds: seconds,
+        durationSeconds: durationSeconds,
+        episodeName: episodeName ?? '',
+      );
+    }
     await upsert(item.copyWith(
       lastWatchedSeconds: seconds,
       lastWatchedSeason: season,
@@ -46,6 +57,12 @@ class MediaProvider extends ChangeNotifier {
       watchStatus: seconds > 0 ? AppConstants.statusWatching : item.watchStatus,
     ));
   }
+
+  Future<Map<String, dynamic>?> getEpisodeProgress({required MediaItem item, required int season, required int episode}) {
+    return database.getEpisodeProgress(mediaId: item.id, mediaType: item.mediaType, season: season, episode: episode);
+  }
+
+  Future<List<Map<String, dynamic>>> episodeHistory({int limit = 50}) => database.getEpisodeHistory(limit: limit);
 
   Future<void> remove(MediaItem item) async {
     _library.removeWhere((x) => x.id == item.id && x.mediaType == item.mediaType);
