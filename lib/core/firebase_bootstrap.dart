@@ -21,7 +21,11 @@ class FirebaseBootstrap {
           ? null
           : const String.fromEnvironment('FIREBASE_STORAGE_BUCKET'),
     );
-    await Firebase.initializeApp(options: options);
-    configured = true;
+    try {
+      await Firebase.initializeApp(options: options);
+      configured = true;
+    } catch (_) {
+      configured = false;
+    }
   }
 }
