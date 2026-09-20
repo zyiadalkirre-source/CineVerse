@@ -22,11 +22,17 @@ class DatabaseService {
         await db.execute('CREATE TABLE ${AppConstants.tableSearchHistory} (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, created_at INTEGER NOT NULL)');
         await db.execute('CREATE TABLE ${AppConstants.tableEpisodeProgress} (key TEXT PRIMARY KEY, media_id INTEGER NOT NULL, media_type TEXT NOT NULL, season INTEGER NOT NULL, episode INTEGER NOT NULL, position_seconds INTEGER NOT NULL, duration_seconds INTEGER NOT NULL DEFAULT 0, episode_name TEXT NOT NULL DEFAULT "", updated_at INTEGER NOT NULL)');
         await db.execute('CREATE TABLE ${AppConstants.tableNotifications} (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL, read INTEGER NOT NULL DEFAULT 0)');
+        await db.execute('CREATE TABLE ${AppConstants.tableSyncOutbox} (key TEXT PRIMARY KEY, operation TEXT NOT NULL, payload TEXT, created_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, device_id TEXT NOT NULL)');
+        await db.execute('CREATE TABLE ${AppConstants.tableSyncState} (key TEXT PRIMARY KEY, updated_at INTEGER NOT NULL, device_id TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, synced INTEGER NOT NULL DEFAULT 0)');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await db.execute('CREATE TABLE IF NOT EXISTS ${AppConstants.tableEpisodeProgress} (key TEXT PRIMARY KEY, media_id INTEGER NOT NULL, media_type TEXT NOT NULL, season INTEGER NOT NULL, episode INTEGER NOT NULL, position_seconds INTEGER NOT NULL, duration_seconds INTEGER NOT NULL DEFAULT 0, episode_name TEXT NOT NULL DEFAULT "", updated_at INTEGER NOT NULL)');
           await db.execute('CREATE TABLE IF NOT EXISTS ${AppConstants.tableNotifications} (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL, read INTEGER NOT NULL DEFAULT 0)');
+        }
+        if (oldVersion < 3) {
+          await db.execute('CREATE TABLE IF NOT EXISTS ${AppConstants.tableSyncOutbox} (key TEXT PRIMARY KEY, operation TEXT NOT NULL, payload TEXT, created_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, device_id TEXT NOT NULL)');
+          await db.execute('CREATE TABLE IF NOT EXISTS ${AppConstants.tableSyncState} (key TEXT PRIMARY KEY, updated_at INTEGER NOT NULL, device_id TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, synced INTEGER NOT NULL DEFAULT 0)');
         }
       },
     );

@@ -24,12 +24,14 @@ class AppConstants {
   static const String geminiVisionModel = 'gemini-3.6-flash';
 
   static const String dbName = 'cineverse.db';
-  static const int dbVersion = 2;
+  static const int dbVersion = 3;
   static const String tableLibrary = 'library';
   static const String tableChat = 'chat_history';
   static const String tableSearchHistory = 'search_history';
   static const String tableEpisodeProgress = 'episode_progress';
   static const String tableNotifications = 'notifications';
+  static const String tableSyncOutbox = 'sync_outbox';
+  static const String tableSyncState = 'sync_state';
 }
 
 class AppColors {
