@@ -29,7 +29,7 @@ class VideoSourceService {
         },
       );
 
-      final response = await http.get(uri);
+      final response = await http.get(uri).timeout(const Duration(seconds: 12));
       if (response.statusCode != 200) return null;
 
       final decoded = json.decode(utf8.decode(response.bodyBytes));
