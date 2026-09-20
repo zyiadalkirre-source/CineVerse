@@ -8,6 +8,7 @@ void main() {
       id: 42,
       title: 'Test Show',
       overview: 'Overview',
+      voteAverage: 8.0,
       mediaType: 'tv',
       seasons: 2,
       episodes: 20,
@@ -31,7 +32,7 @@ void main() {
   });
 
   test('MediaItem copyWith updates only requested fields', () {
-    const item = MediaItem(id: 1, title: 'Old', overview: '', mediaType: 'movie');
+    const item = MediaItem(id: 1, title: 'Old', overview: '', voteAverage: 0, mediaType: 'movie');
     final updated = item.copyWith(title: 'New', isFavorite: true);
 
     expect(updated.title, 'New');
