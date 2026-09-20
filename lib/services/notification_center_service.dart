@@ -24,8 +24,8 @@ class NotificationCenterService {
         if (newCount > oldCount) {
           final added = newCount - oldCount;
           final body = added == 1
-              ? 'نزلت حلقة جديدة لمسلسل \${item.title}.'
-              : 'نزلت \$added حلقات جديدة لمسلسل \${item.title}.';
+              ? 'نزلت حلقة جديدة لمسلسل ${item.title}.'
+              : 'نزلت $added حلقات جديدة لمسلسل ${item.title}.';
 
           await _database.addNotification(
             title: 'حلقة جديدة 🎬',
@@ -34,7 +34,7 @@ class NotificationCenterService {
 
           await NotificationService.showNotification(
             id: item.id,
-            title: 'حلقة جديدة في \${item.title}',
+            title: 'حلقة جديدة في ${item.title}',
             body: body,
           );
 
