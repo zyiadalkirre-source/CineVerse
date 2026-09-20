@@ -22,31 +22,25 @@ class _AiPosterScreenState extends State<AiPosterScreen> {
 
   Future<void> _pick() async {
     try {
-      final image = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
+      final image = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 88);
       if (image == null) return;
-
-      final data = await image.readAsBytes();
+      final bytes = await image.readAsBytes();
       if (!mounted) return;
-
       setState(() {
-        _bytes = data;
+        _bytes = bytes;
         _result = '';
         _error = null;
       });
-    } catch (_) {
-      if (mounted) {
-        setState(() => _error = 'تعذر اختيار الصورة. حاول مرة أخرى.');
-      }
+    } catch (error) {
+      if (!mounted) return;
+      final normalized = AiErrorNormalizer.normalize(error);
+      setState(() => _error = normalized.message);
     }
   }
 
   Future<void> _analyze() async {
-    final data = _bytes;
-    if (data == null || _loading) return;
-
+    final bytes = _bytes;
+    if (bytes == null || _loading) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -54,9 +48,8 @@ class _AiPosterScreenState extends State<AiPosterScreen> {
     });
 
     try {
-      final poster = await context.read<AiProvider>().analyzePoster(data);
+      final poster = await context.read<AiProvider>().analyzePoster(bytes);
       if (!mounted) return;
-
       setState(() {
         _result = [
           'النوع: ${poster.type}',
@@ -70,12 +63,12 @@ class _AiPosterScreenState extends State<AiPosterScreen> {
           poster.verdict,
         ].join('\n');
       });
-    } on AiServiceException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } catch (_) {
-      if (mounted) {
-        setState(() => _error = 'حدث خطأ أثناء تحليل البوستر. حاول مرة أخرى.');
-      }
+    } on AiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } on AiServiceException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (error) {
+      if (mounted) setState(() => _error = AiErrorNormalizer.normalize(error).message);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -83,39 +76,49 @@ class _AiPosterScreenState extends State<AiPosterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('تحليل البوستر')),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _PosterEmptyState(
-                hasImage: _bytes != null,
-                onPick: _loading ? null : _pick,
-                image: _bytes,
-              ),
+              _PosterCard(image: _bytes, onPick: _loading ? null : _pick),
               const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _loading || _bytes == null ? null : _analyze,
-                  icon: _loading
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.auto_awesome),
-                  label: Text(_loading ? 'جارٍ التحليل...' : 'تحليل البوستر'),
-                ),
+              FilledButton.icon(
+                onPressed: _loading || _bytes == null ? null : _analyze,
+                icon: _loading
+                    ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.auto_awesome),
+                label: Text(_loading ? 'جارٍ التحليل...' : 'تحليل البوستر'),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 14),
-                _ErrorCard(message: _error!),
+                Card(
+                  color: theme.colorScheme.errorContainer,
+                  child: ListTile(
+                    leading: Icon(Icons.error_outline, color: theme.colorScheme.onErrorContainer),
+                    title: Text(_error!, style: TextStyle(color: theme.colorScheme.onErrorContainer)),
+                  ),
+                ),
               ],
               if (_result.isNotEmpty) ...[
                 const SizedBox(height: 14),
-                _ResultCard(result: _result),
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 120),
+                      child: SelectableText(
+                        _result,
+                        style: const TextStyle(height: 1.6),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ],
           ),
@@ -125,114 +128,65 @@ class _AiPosterScreenState extends State<AiPosterScreen> {
   }
 }
 
-class _PosterEmptyState extends StatelessWidget {
-  const _PosterEmptyState({
-    required this.hasImage,
-    required this.onPick,
-    required this.image,
-  });
+class _PosterCard extends StatelessWidget {
+  const _PosterCard({required this.image, required this.onPick});
 
-  final bool hasImage;
-  final VoidCallback? onPick;
   final Uint8List? image;
+  final VoidCallback? onPick;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onPick,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 300, maxHeight: 520),
-          child: image == null
-              ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(28),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.image_search_outlined, size: 72),
-                        SizedBox(height: 16),
-                        Text(
-                          'حلّل أي بوستر بالذكاء الاصطناعي',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'اختر صورة واضحة من جهازك لمعرفة النوع والمزاج والألوان والرموز والجمهور المستهدف.',
-                          textAlign: TextAlign.center,
-                        ),
-                        SizedBox(height: 18),
-                        Text('JPG أو PNG • صورة واضحة أفضل للنتيجة'),
-                      ],
-                    ),
-                  ),
-                )
-              : Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.memory(image!, fit: BoxFit.contain),
-                    Positioned(
-                      left: 12,
-                      right: 12,
-                      bottom: 12,
-                      child: FilledButton.tonalIcon(
+      child: AspectRatio(
+        aspectRatio: 0.72,
+        child: image == null
+            ? InkWell(
+                onTap: onPick,
+                child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.image_search_outlined, size: 72, color: theme.colorScheme.primary),
+                      const SizedBox(height: 18),
+                      const Text(
+                        'ابدأ بتحليل بوستر سينمائي',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'اختر صورة واضحة من جهازك لمعرفة النوع والمزاج والألوان والرموز والجمهور المستهدف.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 18),
+                      FilledButton.tonalIcon(
                         onPressed: onPick,
                         icon: const Icon(Icons.photo_library_outlined),
-                        label: const Text('اختيار صورة أخرى'),
+                        label: const Text('اختيار صورة'),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ResultCard extends StatelessWidget {
-  const _ResultCard({required this.result});
-
-  final String result;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: SelectableText(
-          result,
-          style: const TextStyle(height: 1.55),
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: Theme.of(context).colorScheme.errorContainer,
-      child: ListTile(
-        leading: Icon(
-          Icons.cloud_off_outlined,
-          color: Theme.of(context).colorScheme.onErrorContainer,
-        ),
-        title: Text(
-          message,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onErrorContainer,
-          ),
-        ),
+              )
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.memory(image!, fit: BoxFit.contain),
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 12,
+                    child: FilledButton.tonalIcon(
+                      onPressed: onPick,
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text('اختيار صورة أخرى'),
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
