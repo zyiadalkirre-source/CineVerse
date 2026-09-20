@@ -22,7 +22,7 @@ class TmdbService {
       'query': query.trim(),
       'language': lang,
     });
-    final res = await http.get(url);
+    final res = await http.get(url).timeout(const Duration(seconds: 12));
     if (res.statusCode != 200) throw Exception('Search failed: ${res.statusCode}');
     final data = json.decode(utf8.decode(res.bodyBytes));
     final results = data['results'];
@@ -44,14 +44,14 @@ class TmdbService {
       'api_key': _apiKey,
       'language': lang,
     });
-    final res = await http.get(url);
+    final res = await http.get(url).timeout(const Duration(seconds: 12));
     if (res.statusCode != 200) throw Exception('Details failed: ${res.statusCode}');
     final data = Map<String, dynamic>.from(json.decode(utf8.decode(res.bodyBytes)));
     var item = MediaItem.fromJson({...data, 'media_type': type});
 
     try {
       final creditsUrl = Uri.parse('$_base/$type/$id/credits').replace(queryParameters: {'api_key': _apiKey});
-      final cRes = await http.get(creditsUrl);
+      final cRes = await http.get(creditsUrl).timeout(const Duration(seconds: 12));
       if (cRes.statusCode == 200) {
         final credits = Map<String, dynamic>.from(json.decode(utf8.decode(cRes.bodyBytes)));
         final rawCast = credits['cast'];
@@ -68,7 +68,7 @@ class TmdbService {
 
     try {
       final vUrl = Uri.parse('$_base/$type/$id/videos').replace(queryParameters: {'api_key': _apiKey});
-      final vRes = await http.get(vUrl);
+      final vRes = await http.get(vUrl).timeout(const Duration(seconds: 12));
       if (vRes.statusCode == 200) {
         final vids = Map<String, dynamic>.from(json.decode(utf8.decode(vRes.bodyBytes)));
         final results = vids['results'];
@@ -90,7 +90,7 @@ class TmdbService {
     final url = Uri.parse('$_base/$type/$id/recommendations').replace(queryParameters: {
       'api_key': _apiKey, 'language': lang,
     });
-    final res = await http.get(url);
+    final res = await http.get(url).timeout(const Duration(seconds: 12));
     if (res.statusCode != 200) return [];
     final data = json.decode(utf8.decode(res.bodyBytes));
     final results = data['results'];
@@ -103,7 +103,7 @@ class TmdbService {
     final url = Uri.parse('$_base/trending/all/week').replace(queryParameters: {
       'api_key': _apiKey, 'language': lang,
     });
-    final res = await http.get(url);
+    final res = await http.get(url).timeout(const Duration(seconds: 12));
     if (res.statusCode != 200) return [];
     final data = json.decode(utf8.decode(res.bodyBytes));
     final results = data['results'];
@@ -118,7 +118,7 @@ class TmdbService {
     final url = Uri.parse('$_base/$type/top_rated').replace(queryParameters: {
       'api_key': _apiKey, 'language': lang,
     });
-    final res = await http.get(url);
+    final res = await http.get(url).timeout(const Duration(seconds: 12));
     if (res.statusCode != 200) return [];
     final data = json.decode(utf8.decode(res.bodyBytes));
     final results = data['results'];
@@ -133,7 +133,7 @@ class TmdbService {
       'api_key': _apiKey,
       'language': lang,
     });
-    final res = await http.get(url);
+    final res = await http.get(url).timeout(const Duration(seconds: 12));
     if (res.statusCode != 200) return [];
     final data = json.decode(utf8.decode(res.bodyBytes));
     final raw = data['episodes'];
@@ -152,7 +152,7 @@ class TmdbService {
           'language': lang,
           'page': '1',
         });
-        final res = await http.get(url);
+        final res = await http.get(url).timeout(const Duration(seconds: 12));
         if (res.statusCode != 200) return;
         final data = json.decode(utf8.decode(res.bodyBytes));
         final raw = data['results'];
