@@ -45,7 +45,6 @@ class _WatchScreenState extends State<WatchScreen> {
   bool _loading = true;
   bool _fullscreen = false;
   bool _showTrailer = false;
-  String? _error;
   String? _resolvedUrl;
   String? _resolvedTrailerKey;
   List<WatchProvider> _providers = const [];
@@ -89,7 +88,6 @@ class _WatchScreenState extends State<WatchScreen> {
       }
       tmdb.dispose();
     } catch (error) {
-      _error = 'تعذر تحميل خيارات المشاهدة حالياً.';
     }
 
     if (!mounted) return;
@@ -97,7 +95,6 @@ class _WatchScreenState extends State<WatchScreen> {
       _resolvedUrl = direct;
       _resolvedTrailerKey = trailer;
       _loading = false;
-      _error = null;
     });
 
     if (_resolvedUrl != null && _resolvedUrl!.isNotEmpty) {
@@ -123,7 +120,7 @@ class _WatchScreenState extends State<WatchScreen> {
 
     final uri = Uri.tryParse(_resolvedUrl!);
     if (uri == null || !uri.hasScheme) {
-      if (mounted) setState(() => _error = 'رابط المشاهدة غير صالح.');
+      if (mounted) setState(() {});
       return;
     }
 
@@ -140,7 +137,7 @@ class _WatchScreenState extends State<WatchScreen> {
     } catch (_) {
       _controller?.dispose();
       _controller = null;
-      if (mounted) setState(() => _error = 'تعذر تشغيل المصدر المباشر حالياً.');
+      if (mounted) setState(() {});
     }
   }
 
