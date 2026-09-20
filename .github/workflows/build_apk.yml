@@ -137,12 +137,13 @@ jobs:
                   if "import org.jetbrains.kotlin.gradle.dsl.JvmTarget" not in text:
                       text = "import org.jetbrains.kotlin.gradle.dsl.JvmTarget\n\n" + text
                   if "compilerOptions" not in text:
-                      text = text.replace("android {", """android {
-              kotlin {
-                  compilerOptions {
-                      jvmTarget.set(JvmTarget.JVM_17)
-                  }
-              }""", 1)
+                      text = text.replace("android {", """kotlin {
+              compilerOptions {
+                  jvmTarget.set(JvmTarget.JVM_17)
+              }
+          }
+
+          android {""", 1)
               else:
                   text += f"""
           android {{
