@@ -1,15 +1,12 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_litert_lm/flutter_litert_lm.dart';
-import 'package:http/http.dart' as http;
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/turtle_brain.dart';
+import '../services/turtle_model_downloader.dart';
 
 class TurtleScreen extends StatefulWidget {
   const TurtleScreen({super.key});
@@ -88,78 +85,26 @@ class _TurtleScreenState extends State<TurtleScreen> {
       _downloadProgress = 0;
     });
 
-    final client = http.Client();
-    File? tempFile;
-
     try {
-      final directory = await getApplicationSupportDirectory();
-      final modelFile = File(p.join(directory.path, _modelFilename));
-      tempFile = File('${modelFile.path}.part');
-
-      // Keep the complete model between app launches so it is downloaded once.
-      if (!await modelFile.exists() ||
-          await modelFile.length() < 300 * 1024 * 1024) {
-        if (await tempFile.exists()) {
-          await tempFile.delete();
-        }
-
-        final request = http.Request('GET', Uri.parse(_modelUrl));
-        final response = await client.send(request).timeout(
-          const Duration(minutes: 20),
-        );
-
-        if (response.statusCode != 200) {
-          throw HttpException(
-            'تعذر تنزيل نموذج Turtle (HTTP ${response.statusCode}).',
-          );
-        }
-
-        final total = response.contentLength;
-        var received = 0;
-        final sink = tempFile.openWrite();
-
-        try {
-          await for (final chunk in response.stream) {
-            sink.add(chunk);
-            received += chunk.length;
-            if (mounted && total != null && total > 0) {
-              setState(() => _downloadProgress = received / total);
-            }
+      final path = await TurtleModelDownloader.download(
+        onProgress: (progress) {
+          if (mounted) {
+            setState(() => _downloadProgress = progress);
           }
-        } finally {
-          await sink.flush();
-          await sink.close();
-        }
-
-        if (total != null && received != total) {
-          throw StateError(
-            'اكتمل تنزيل غير صحيح لنموذج Turtle. حاول التنزيل مرة أخرى.',
-          );
-        }
-
-        if (await modelFile.exists()) {
-          await modelFile.delete();
-        }
-        await tempFile.rename(modelFile.path);
-      }
+        },
+      );
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_modelKey, modelFile.path);
+      await prefs.setString(_modelKey, path);
 
       if (!mounted) return;
       setState(() {
-        _modelPath = modelFile.path;
+        _modelPath = path;
         _downloadProgress = 1;
       });
 
       await _loadModel();
     } catch (e) {
-      if (tempFile != null && await tempFile.exists()) {
-        try {
-          await tempFile.delete();
-        } catch (_) {}
-      }
-
       if (mounted) {
         _addAssistant(
           'تعذر تنزيل نموذج Turtle. تحقق من اتصال الإنترنت ثم حاول مرة أخرى، '
@@ -170,7 +115,6 @@ class _TurtleScreenState extends State<TurtleScreen> {
         );
       }
     } finally {
-      client.close();
       if (mounted) {
         setState(() {
           _loadingModel = false;
@@ -179,7 +123,6 @@ class _TurtleScreenState extends State<TurtleScreen> {
       }
     }
   }
-
   Future<void> _loadModel({bool showMessage = true}) async {
     final path = _modelPath;
     if (path == null || path.isEmpty) return;
