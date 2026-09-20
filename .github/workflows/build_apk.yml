@@ -27,6 +27,8 @@ jobs:
 
       - name: Ensure Android platform exists
         shell: bash
+        env:
+          FIREBASE_ANDROID_CONFIG_JSON: ${{ secrets.FIREBASE_ANDROID_CONFIG_JSON }}
         run: |
           if [ ! -d "android" ]; then
             flutter create . \
@@ -68,22 +70,28 @@ jobs:
               text = text.replace("com.android.tools.build:gradle:7.4.2", f"com.android.tools.build:gradle:{agp_version}")
               build_gradle.write_text(text)
 
-          # New Flutter templates declare AGP in settings.gradle via the plugins DSL.
+          # New Flutter templates declare AGP/Kotlin in settings.gradle.kts via the plugins DSL.
+          # Match the actual declarations instead of depending on a particular Flutter template version.
           if settings_gradle.exists():
               text = settings_gradle.read_text()
-              # Flutter templates change the default plugin versions over time.
-              # Match the plugin declarations themselves so the CI toolchain stays deterministic.
               import re
               text = re.sub(
-                  r'(id\\(["\\]com\\.android\\.application["\\]\\)\\s+version\\s+["\\])[^"\\]+(["\\])',
-                  rf'\\g<1>{agp_version}\\g<2>',
+                  r'(id\\("com\\.android\\.application"\\)\\s+version\\s+")([^"]+)(")',
+                  rf'\\g<1>{agp_version}\\g<3>',
                   text,
               )
               text = re.sub(
-                  r'(id\\(["\\]org\\.jetbrains\\.kotlin\\.android["\\]\\)\\s+version\\s+["\\])[^"\\]+(["\\])',
-                  rf'\\g<1>{kotlin_version}\\g<2>',
+                  r'(id\\("org\\.jetbrains\\.kotlin\\.android"\\)\\s+version\\s+")([^"]+)(")',
+                  rf'\\g<1>{kotlin_version}\\g<3>',
                   text,
               )
+              # Google Sign-In/Firebase Android support.
+              if 'com.google.gms.google-services' not in text:
+                  text = text.replace(
+                      'plugins {',
+                      'plugins {\\n    id("com.google.gms.google-services") version "4.4.4" apply false',
+                      1,
+                  )
               settings_gradle.write_text(text)
           if wrapper_props.exists():
               text = wrapper_props.read_text()
@@ -190,6 +198,23 @@ jobs:
 
           print("Android Gradle project prepared with Kotlin", kotlin_version, "and AGP", agp_version)
           PY
+
+          # Add Firebase Android configuration when the repository secret is provided.
+          if [ -n "${FIREBASE_ANDROID_CONFIG_JSON:-}" ]; then
+            printf '%s' "$FIREBASE_ANDROID_CONFIG_JSON" > android/app/google-services.json
+          fi
+
+                    # Apply the Google Services plugin to the app module when Firebase is configured.
+          if [ -f android/app/google-services.json ] && [ -f android/app/build.gradle.kts ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          p=Path("android/app/build.gradle.kts")
+          t=p.read_text()
+          if 'com.google.gms.google-services' not in t:
+              t += '\napply(plugin = "com.google.gms.google-services")\n'
+              p.write_text(t)
+          PY
+          fi
 
           # LiteRT-LM 0.3.0 ships an AAR containing Java 21 bytecode.
           # Jetifier bundled with older Android toolchains cannot transform class
@@ -321,7 +346,8 @@ jobs:
 
       - name: Build release APK
         shell: bash
-        run: flutter build apk --release --dart-define=TMDB_API_KEY="${{ secrets.TMDB_API_KEY }}" --dart-define=GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
+        run: |
+          flutter build apk --release             --dart-define=TMDB_API_KEY="${{ secrets.TMDB_API_KEY }}"             --dart-define=GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"             --dart-define=FIREBASE_API_KEY="${{ secrets.FIREBASE_API_KEY }}"             --dart-define=FIREBASE_APP_ID="${{ secrets.FIREBASE_APP_ID }}"             --dart-define=FIREBASE_MESSAGING_SENDER_ID="${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}"             --dart-define=FIREBASE_PROJECT_ID="${{ secrets.FIREBASE_PROJECT_ID }}"             --dart-define=FIREBASE_AUTH_DOMAIN="${{ secrets.FIREBASE_AUTH_DOMAIN }}"             --dart-define=FIREBASE_STORAGE_BUCKET="${{ secrets.FIREBASE_STORAGE_BUCKET }}"
 
       - name: Verify APK exists
         shell: bash
