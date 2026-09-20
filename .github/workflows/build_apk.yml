@@ -195,17 +195,24 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           text = manifest.read_text() if manifest.exists() else ""
           permission = '<uses-permission android:name="android.permission.INTERNET"/>'
+
+          if not manifest.exists():
+              raise SystemExit("android/app/src/main/AndroidManifest.xml was not generated")
+
           if permission not in text:
-              text = text.replace(
-                  "<manifest",
-                  "<manifest\n    " + permission,
-                  1,
-              )
+              match = re.search(r"<manifest\\b[^>]*>", text, flags=re.S)
+              if not match:
+                  raise SystemExit("Unable to locate the opening <manifest> tag")
+              opening_tag = match.group(0)
+              replacement = opening_tag + "\\n    " + permission
+              text = text[:match.start()] + replacement + text[match.end():]
               manifest.write_text(text)
+
           print("Android INTERNET permission ensured")
           PY
 
