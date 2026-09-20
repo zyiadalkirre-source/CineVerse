@@ -352,7 +352,7 @@ class MediaRepository {
     }
 
     if (!forceRefresh && fresh) {
-      return cachedItem!;
+      return cachedItem;
     }
 
     if (!forceRefresh && cachedItem != null) {
