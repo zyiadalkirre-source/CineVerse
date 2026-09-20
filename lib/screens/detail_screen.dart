@@ -28,13 +28,13 @@ class _DetailScreenState extends State<DetailScreen> {
     if(!mounted)return;
     setState(()=>item=x);
     try { final r=await p.recommendations(x,'ar'); if(mounted)setState(()=>recommendations=r.take(10).toList()); } catch(_){}
-    try { final providers=await p.tmdb.getWatchProviders(x.id,x.mediaType,region:'SY'); if(mounted)setState(()=>watchProviders=providers); } catch(_) {}
+    try { final providers=await p.getWatchProviders(x,region:'SY'); if(mounted)setState(()=>watchProviders=providers); } catch(_) {}
     if(x.mediaType=='tv' && (x.seasons??0)>0) _loadEpisodes(1);
   }
   Future<void> _loadEpisodes(int s) async {
     setState(()=>episodesLoading=true);
     try {
-      final e=await context.read<MediaProvider>().tmdb.getTvEpisodes(item.id,s);
+      final e=await context.read<MediaProvider>().getTvEpisodes(item.id,s);
       if(mounted)setState(() {
         episodes=e;
         if (item.lastWatchedSeason == s) selectedEpisodeNumber=item.lastWatchedEpisode;
@@ -149,8 +149,8 @@ class _DetailScreenState extends State<DetailScreen> {
     String? trailerKey;
     if (directUrl == null) {
       try {
-        final videos=await context.read<MediaProvider>().tmdb.getEpisodeVideos(item.id,season,number,lang:'ar');
-        trailerKey=context.read<MediaProvider>().tmdb.findYoutubeTrailerKey(videos);
+        final videos=await context.read<MediaProvider>().getEpisodeVideos(item.id,season,number,lang:'ar');
+        trailerKey=context.read<MediaProvider>().findYoutubeTrailerKey(videos);
       } catch (_) {}
     }
     if (!mounted) return;
