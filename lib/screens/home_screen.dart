@@ -10,6 +10,8 @@ import 'ai_hub_screen.dart';
 import 'notes_screen.dart';
 import 'stats_screen.dart';
 import 'settings_screen.dart';
+import 'drawer_section_screen.dart';
+import 'notifications_screen.dart';
 import '../widgets/custom_drawer.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -24,14 +26,47 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       drawer: CustomDrawer(
         selectedIndex: index,
+        onNotifications: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+          );
+        },
         onItemSelected: (selected) {
           if (selected == 14) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
             );
-          } else if (selected == 0) {
+            return;
+          }
+          if (selected == 0) {
             setState(() => index = 0);
+            return;
+          }
+          final sections = <int, DrawerSection>{
+            1: DrawerSection.anime,
+            2: DrawerSection.seasons,
+            3: DrawerSection.globalRating,
+            4: DrawerSection.arabicRating,
+            5: DrawerSection.myList,
+            6: DrawerSection.customList,
+            7: DrawerSection.favoriteAnime,
+            8: DrawerSection.favoriteCharacters,
+            9: DrawerSection.history,
+            10: DrawerSection.downloads,
+            11: DrawerSection.popularCharacters,
+            12: DrawerSection.recommendations,
+            13: DrawerSection.episodeDates,
+          };
+          final section = sections[selected];
+          if (section != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DrawerSectionScreen(section: section),
+              ),
+            );
           }
         },
       ),
