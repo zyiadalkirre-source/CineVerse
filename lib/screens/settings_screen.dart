@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../providers/settings_provider.dart';
 import '../providers/theme_provider.dart';
@@ -348,6 +349,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: TextStyle(fontSize: 12),
               ),
             ),
+            const SizedBox(height: 10),
+            Center(
+              child: Text(
+                'تصميم زياد القري ✨',
+                textDirection: TextDirection.rtl,
+                style: GoogleFonts.getFont(
+                  'Aref Ruqaa',
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: .2,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
           ],
         ),
       ),
