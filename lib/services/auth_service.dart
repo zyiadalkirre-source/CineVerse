@@ -2,6 +2,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
 
+abstract interface class AuthClient {
+  Stream<User?> get authStateChanges;
+  User? get currentUser;
+  Future<UserCredential?> signInWithGoogle();
+  Future<void> signOut();
+}
+
 class AuthException implements Exception {
   AuthException(this.message, [this.code]);
   final String message;
@@ -9,20 +16,24 @@ class AuthException implements Exception {
   @override String toString() => message;
 }
 
-class AuthService {
+class AuthService implements AuthClient {
   AuthService._();
   static final instance = AuthService._();
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _google = GoogleSignIn.instance;
 
+  @override
   Stream<User?> get authStateChanges => _auth.authStateChanges();
+
+  @override
   User? get currentUser => _auth.currentUser;
 
   Future<void> initialize() async {
     if (!kIsWeb) await _google.initialize();
   }
 
+  @override
   Future<UserCredential?> signInWithGoogle() async {
     try {
       if (kIsWeb) {
@@ -81,6 +92,7 @@ class AuthService {
     }
   }
 
+  @override
   Future<void> signOut() async {
     if (!kIsWeb) {
       try { await _google.signOut(); } catch (_) {}
