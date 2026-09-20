@@ -6,6 +6,7 @@ class ApiConfig {
   static const _storage = FlutterSecureStorage();
   static String tmdbKey = AppConstants.tmdbApiKey;
   static String geminiKey = AppConstants.geminiApiKey;
+  static String videoSourceBaseUrl = AppConstants.videoSourceBaseUrl;
 
   static Future<void> init() async {
     tmdbKey = await _storage.read(key: 'tmdb_api_key') ?? AppConstants.tmdbApiKey;
