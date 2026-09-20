@@ -25,12 +25,14 @@ class _WatchScreenState extends State<WatchScreen> {
   bool _fullscreen = false;
   String? _error;
   int _lastSyncedSecond = -1;
-  String get _progressKey => 'watch_progress_' + widget.title + '_' + widget.season.toString() + '_' + widget.episode.toString();
+  String get _progressKey => 'watch_progress_${widget.title}_${widget.season}_${widget.episode}';
 
   @override void initState() { super.initState(); _prepare(); }
   Future<void> _prepare() async {
+    final mediaProvider = context.read<MediaProvider>();
     _prefs = await SharedPreferences.getInstance();
-    final episodeSaved = await context.read<MediaProvider>().getEpisodeProgress(
+    if (!mounted) return;
+    final episodeSaved = await mediaProvider.getEpisodeProgress(
       item: widget.item,
       season: widget.season,
       episode: widget.episode,
@@ -74,7 +76,7 @@ class _WatchScreenState extends State<WatchScreen> {
       await p.setInt(_progressKey, seconds);
       if (mounted && (seconds - _lastSyncedSecond).abs() >= 5) {
         _lastSyncedSecond = seconds;
-        await context.read<MediaProvider>().saveWatchProgress(
+        await mediaProvider.saveWatchProgress(
           widget.item,
           seconds: seconds,
           season: widget.season,
@@ -107,7 +109,7 @@ class _WatchScreenState extends State<WatchScreen> {
   String _time(Duration d) { final h=d.inHours; final m=d.inMinutes.remainder(60).toString().padLeft(2,'0'); final s=d.inSeconds.remainder(60).toString().padLeft(2,'0'); return h>0 ? h.toString()+':'+m+':'+s : m+':'+s; }
   @override Widget build(BuildContext context) {
     final c=_controller; final ready=c!=null && c.value.isInitialized;
-    return Scaffold(backgroundColor: Colors.black, appBar: _fullscreen ? null : AppBar(title: Text(widget.title+' — م'+widget.season.toString()+' ح'+widget.episode.toString())), body: SafeArea(top:!_fullscreen,bottom:!_fullscreen,child:Center(child: ready ? AspectRatio(aspectRatio:c.value.aspectRatio==0?16/9:c.value.aspectRatio,child:Stack(alignment:Alignment.bottomCenter,children:[VideoPlayer(c),_Controls(controller:c,format:_time,onSeek:_seek,onFullscreen:_fullscreenToggle,fullscreen:_fullscreen)])) : _Status(loading:_initializing,error:_error,episodeName:widget.episodeName))));
+    return Scaffold(backgroundColor: Colors.black, appBar: _fullscreen ? null : AppBar(title: Text('${widget.title} — م${widget.season} ح${widget.episode}')), body: SafeArea(top:!_fullscreen,bottom:!_fullscreen,child:Center(child: ready ? AspectRatio(aspectRatio:c.value.aspectRatio==0?16/9:c.value.aspectRatio,child:Stack(alignment:Alignment.bottomCenter,children:[VideoPlayer(c),_Controls(controller:c,format:_time,onSeek:_seek,onFullscreen:_fullscreenToggle,fullscreen:_fullscreen)])) : _Status(loading:_initializing,error:_error,episodeName:widget.episodeName))));
   }
 }
 
