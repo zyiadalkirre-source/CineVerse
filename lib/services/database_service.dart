@@ -34,6 +34,13 @@ class DatabaseService {
           await db.execute('CREATE TABLE IF NOT EXISTS ${AppConstants.tableSyncOutbox} (key TEXT PRIMARY KEY, operation TEXT NOT NULL, payload TEXT, created_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, device_id TEXT NOT NULL)');
           await db.execute('CREATE TABLE IF NOT EXISTS ${AppConstants.tableSyncState} (key TEXT PRIMARY KEY, updated_at INTEGER NOT NULL, device_id TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, synced INTEGER NOT NULL DEFAULT 0)');
         }
+        if (oldVersion < 4) {
+          await db.execute('DROP TABLE IF EXISTS ${AppConstants.tableSyncOutbox}');
+          await db.execute('DROP TABLE IF EXISTS ${AppConstants.tableSyncState}');
+          await db.execute('CREATE TABLE ${AppConstants.tableSyncOutbox} (id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, operation TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL, synced_at INTEGER)');
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_sync_outbox_pending ON ${AppConstants.tableSyncOutbox}(synced_at, created_at)');
+          await db.execute('CREATE TABLE ${AppConstants.tableSyncState} (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INTEGER NOT NULL)');
+        }
       },
     );
     return _db!;
@@ -44,21 +51,61 @@ class DatabaseService {
     return rows.map((r) => MediaItem.fromJson(jsonDecode(r['data']! as String) as Map<String, dynamic>)).toList();
   }
 
-  Future<void> saveMedia(MediaItem item) async {
-    await (await database).insert(
+  Future<void> saveMedia(MediaItem item, {bool enqueueSync = true}) async {
+    final db = await database;
+    await db.insert(
       AppConstants.tableLibrary,
       {'key': '${item.mediaType}:${item.id}', 'data': jsonEncode(item.toJson())},
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    if (enqueueSync) {
+      await _enqueueMediaChange(db, item, 'UPDATE');
+    }
   }
 
-  Future<void> deleteLibrary() async => (await database).delete(AppConstants.tableLibrary);
+  Future<void> deleteLibrary({bool enqueueSync = true}) async {
+    final db = await database;
+    if (!enqueueSync) {
+      await db.delete(AppConstants.tableLibrary);
+      return;
+    }
+    final rows = await db.query(AppConstants.tableLibrary);
+    await db.delete(AppConstants.tableLibrary);
+    for (final row in rows) {
+      final item = MediaItem.fromJson(jsonDecode(row['data']! as String) as Map<String, dynamic>);
+      await _enqueueMediaChange(db, item, 'DELETE');
+    }
+  }
 
-  Future<void> deleteMedia(MediaItem item) async => (await database).delete(
-        AppConstants.tableLibrary,
-        where: 'key = ?',
-        whereArgs: ['${item.mediaType}:${item.id}'],
-      );
+  Future<void> deleteMedia(MediaItem item, {bool enqueueSync = true}) async {
+    final db = await database;
+    await db.delete(
+      AppConstants.tableLibrary,
+      where: 'key = ?',
+      whereArgs: ['${item.mediaType}:${item.id}'],
+    );
+    if (enqueueSync) {
+      await _enqueueMediaChange(db, item, 'DELETE');
+    }
+  }
+
+  Future<void> _enqueueMediaChange(Database db, MediaItem item, String operation) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final entityId = '${item.mediaType}:${item.id}';
+    await db.insert(
+      AppConstants.tableSyncOutbox,
+      {
+        'id': '${now}-${entityId}-${operation}',
+        'entity_type': AppConstants.tableLibrary,
+        'entity_id': entityId,
+        'operation': operation,
+        'payload': jsonEncode(item.toJson()),
+        'created_at': now,
+        'synced_at': null,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
 
   Future<void> saveChat(ChatMessage message) async {
     await (await database).insert(
