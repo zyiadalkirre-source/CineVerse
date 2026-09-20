@@ -4,6 +4,7 @@ import '../l10n/translations.dart';
 import '../models/media_item.dart';
 import '../providers/media_provider.dart';
 import '../providers/settings_provider.dart';
+import '../core/firebase_bootstrap.dart';
 import 'search_screen.dart';
 import 'detail_screen.dart';
 import 'ai_hub_screen.dart';
@@ -25,7 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final pages = const [_Library(), _Discover(), AiHubScreen(), NotesScreen(), StatsScreen()];
   @override Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
-    final user = FirebaseAuth.instance.currentUser;
+    final user = FirebaseBootstrap.configured ? FirebaseAuth.instance.currentUser : null;
     return Scaffold(
       drawer: CustomDrawer(
         userName: user?.displayName ?? '🌝 moon 🌝',
