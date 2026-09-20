@@ -28,6 +28,7 @@ class DatabaseService {
     await (await database).insert(AppConstants.tableLibrary, {'key':'${item.mediaType}:${item.id}','data':jsonEncode(item.toJson())}, conflictAlgorithm:ConflictAlgorithm.replace);
   }
   Future<void> deleteLibrary() async => (await database).delete(AppConstants.tableLibrary);
+  Future<void> deleteMedia(MediaItem item) async => (await database).delete(AppConstants.tableLibrary, where: 'key = ?', whereArgs: ['${item.mediaType}:${item.id}']);
   Future<void> saveChat(ChatMessage message) async {
     await (await database).insert(AppConstants.tableChat, {'id':message.id,'data':jsonEncode(message.toJson()),'created_at':message.createdAt.millisecondsSinceEpoch}, conflictAlgorithm:ConflictAlgorithm.replace);
   }
