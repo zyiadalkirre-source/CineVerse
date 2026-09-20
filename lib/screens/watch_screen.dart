@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import '../models/media_item.dart';
 import '../providers/media_provider.dart';
+import '../services/video_source_service.dart';
 import 'package:provider/provider.dart';
 
 class WatchScreen extends StatefulWidget {
@@ -37,8 +38,19 @@ class _WatchScreenState extends State<WatchScreen> {
     final saved = episodeSaved?['position_seconds'] is int
         ? episodeSaved!['position_seconds'] as int
         : (_prefs?.getInt(_progressKey) ?? (widget.item.lastWatchedSeason == widget.season && widget.item.lastWatchedEpisode == widget.episode ? widget.item.lastWatchedSeconds : 0));
-    if (widget.videoUrl == null || widget.videoUrl!.trim().isEmpty) { if (mounted) setState(() => _error = 'لا يوجد مصدر مشاهدة فعلي لهذه الحلقة حالياً.'); return; }
-    final uri = Uri.tryParse(widget.videoUrl!);
+    String? resolvedUrl = widget.videoUrl?.trim();
+    if (resolvedUrl == null || resolvedUrl.isEmpty) {
+      resolvedUrl = await VideoSourceService.instance.resolve(
+        item: widget.item,
+        season: widget.season,
+        episode: widget.episode,
+      );
+    }
+    if (resolvedUrl == null || resolvedUrl.isEmpty) {
+      if (mounted) setState(() => _error = 'لا يوجد مصدر مشاهدة فعلي لهذه الحلقة حالياً.');
+      return;
+    }
+    final uri = Uri.tryParse(resolvedUrl);
     if (uri == null || !uri.hasScheme) { if (mounted) setState(() => _error = 'رابط المشاهدة غير صالح.'); return; }
     setState(() => _initializing = true);
     try {
