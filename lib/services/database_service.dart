@@ -130,18 +130,19 @@ class DatabaseService {
   }
 
   Future<void> _enqueueMediaChange(Database db, MediaItem item, String operation) async {
-    final now = DateTime.now().microsecondsSinceEpoch;
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final uniqueId = DateTime.now().microsecondsSinceEpoch;
     final entityId = '${item.mediaType}:${item.id}';
 
     await db.insert(
       AppConstants.tableSyncOutbox,
       {
-        'id': '${now}-${entityId}-${operation}',
+        'id': '${uniqueId}-${entityId}-${operation}',
         'entity_type': AppConstants.tableLibrary,
         'entity_id': entityId,
         'operation': operation,
         'payload': jsonEncode(item.toJson()),
-        'created_at': now,
+        'created_at': timestamp,
         'synced_at': null,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
