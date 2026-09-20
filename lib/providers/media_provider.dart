@@ -5,6 +5,8 @@ import '../models/user_stats.dart';
 import '../services/database_service.dart';
 import '../services/tmdb_service.dart';
 import '../services/jikan_service.dart';
+import '../services/notification_center_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MediaProvider extends ChangeNotifier {
   final TmdbService tmdb = TmdbService();
@@ -20,7 +22,20 @@ class MediaProvider extends ChangeNotifier {
   MediaProvider() { _load(); }
 
   Future<void> _load() async {
-    try { _library = await database.getLibrary(); } catch (e) { error = e.toString(); }
+    try {
+      _library = await database.getLibrary();
+      notifyListeners();
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('notifyNewEpisodes') == true) {
+        await NotificationCenterService.checkForNewEpisodes(
+          favoriteShows: _library.where((x) => x.isFavorite && x.mediaType == AppConstants.typeTv).toList(),
+          tmdb: tmdb,
+          updateItem: upsert,
+        );
+      }
+    } catch (e) {
+      error = e.toString();
+    }
     notifyListeners();
   }
 
