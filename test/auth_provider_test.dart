@@ -6,10 +6,15 @@ import 'package:cineverse/providers/auth_provider.dart';
 import 'package:cineverse/services/auth_service.dart';
 
 class FakeAuthClient implements AuthClient {
-  FakeAuthClient({this.signInError, this.signOutError});
+  FakeAuthClient({
+    this.signInError,
+    this.signOutError,
+    this.signInGate,
+  });
 
   final Object? signInError;
   final Object? signOutError;
+  final Completer<void>? signInGate;
   final StreamController<User?> controller =
       StreamController<User?>.broadcast();
 
@@ -25,6 +30,9 @@ class FakeAuthClient implements AuthClient {
   @override
   Future<UserCredential?> signInWithGoogle() async {
     signInCalls++;
+    if (signInGate != null) {
+      await signInGate!.future;
+    }
     if (signInError != null) throw signInError!;
     return null;
   }
@@ -48,7 +56,7 @@ void main() {
     expect(provider.isLoading, isFalse);
     expect(provider.errorMessage, isNull);
 
-    await client.controller.add(null);
+    client.controller.add(null);
     await Future<void>.delayed(Duration.zero);
 
     expect(provider.isAuthenticated, isFalse);
@@ -57,13 +65,22 @@ void main() {
     await client.dispose();
   });
 
-  test('signInWithGoogle manages loading and clears previous errors', () async {
-    final client = FakeAuthClient();
+  test('signInWithGoogle exposes loading state and calls the auth client',
+      () async {
+    final gate = Completer<void>();
+    final client = FakeAuthClient(signInGate: gate);
     final provider = AuthProvider(authClient: client);
 
-    await provider.signInWithGoogle();
+    final signInFuture = provider.signInWithGoogle();
+    await Future<void>.delayed(Duration.zero);
 
     expect(client.signInCalls, 1);
+    expect(provider.isLoading, isTrue);
+    expect(provider.errorMessage, isNull);
+
+    gate.complete();
+    await signInFuture;
+
     expect(provider.isLoading, isFalse);
     expect(provider.errorMessage, isNull);
 
