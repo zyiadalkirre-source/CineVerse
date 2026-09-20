@@ -37,6 +37,13 @@ class JikanService {
         : {};
   }
 
+  Future<MediaItem?> getDetails(int malId) async {
+    if (malId <= 0) return null;
+    final full = await getAnimeFull(malId);
+    if (full.isEmpty) return null;
+    return _fromJikan(full);
+  }
+
   Future<List<Map<String, dynamic>>> getEpisodes(int malId, {int page = 1}) async {
     final res = await http.get(Uri.parse('$_base/anime/$malId/episodes?page=$page'));
     if (res.statusCode != 200) return [];
