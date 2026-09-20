@@ -12,6 +12,7 @@ import 'stats_screen.dart';
 import 'settings_screen.dart';
 import 'drawer_section_screen.dart';
 import 'notifications_screen.dart';
+import 'latest_updates_screen.dart';
 import '../widgets/custom_drawer.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -41,7 +42,12 @@ class _HomeScreenState extends State<HomeScreen> {
             return;
           }
           if (selected == 0) {
-            setState(() => index = 0);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const LatestUpdatesScreen(),
+              ),
+            );
             return;
           }
           final sections = <int, DrawerSection>{
