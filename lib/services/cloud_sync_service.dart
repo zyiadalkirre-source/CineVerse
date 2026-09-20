@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -43,11 +45,19 @@ class CloudSyncService {
   final DatabaseService _local;
   final FirebaseFirestore? _firestoreOverride;
   final FirebaseAuth? _authOverride;
+  final Random _random = Random();
 
   StreamSubscription<User?>? _authSubscription;
   bool _running = false;
   bool _started = false;
   Timer? _periodicSync;
+  Timer? _retryTimer;
+  int _retryAttempt = 0;
+
+  static const Duration _periodicInterval = Duration(seconds: 30);
+  static const Duration _baseBackoff = Duration(seconds: 2);
+  static const Duration _maxBackoff = Duration(minutes: 5);
+  static const Duration _pullClockSkew = Duration(minutes: 2);
 
   FirebaseFirestore get _firestore =>
       _firestoreOverride ?? FirebaseFirestore.instance;
@@ -58,15 +68,29 @@ class CloudSyncService {
     if (_started) return;
 
     _started = true;
+
     _authSubscription = _auth.authStateChanges().listen((user) {
-      if (user != null) unawaited(syncCurrentUser());
+      if (user == null) {
+        _cancelRetry();
+        _retryAttempt = 0;
+        return;
+      }
+
+      unawaited(_runSyncSafely());
     });
 
-    _periodicSync = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (_auth.currentUser != null) {
-        unawaited(syncCurrentUser());
+    _periodicSync = Timer.periodic(_periodicInterval, (_) {
+      if (_auth.currentUser == null || _retryTimer?.isActive == true) {
+        return;
       }
+      unawaited(_runSyncSafely());
     });
+  }
+
+  Future<void> _runSyncSafely() async {
+    try {
+      await syncCurrentUser();
+    } catch (_) {}
   }
 
   Future<void> syncCurrentUser() async {
@@ -76,6 +100,7 @@ class CloudSyncService {
     if (user == null) return;
 
     _running = true;
+
     try {
       await pushOutbox(user.uid);
       await pullLibrary(user.uid);
@@ -83,9 +108,26 @@ class CloudSyncService {
         'last_successful_sync',
         DateTime.now().millisecondsSinceEpoch.toString(),
       );
+      _retryAttempt = 0;
+      _cancelRetry();
     } on FirebaseException catch (firebaseError) {
+      if (_isRetryableFirebaseError(firebaseError)) {
+        _scheduleRetry();
+      }
       throw CloudSyncException(
-        'تعذر مزامنة بياناتك مع السحابة حالياً (' + firebaseError.code + ').',
+        'تعذر مزامنة بياناتك مع السحابة حالياً (' +
+        firebaseError.code +
+        ').',
+      );
+    } on SocketException catch (_) {
+      _scheduleRetry();
+      throw const CloudSyncException(
+        'تعذر الاتصال بالسحابة حالياً. ستتم إعادة المحاولة تلقائياً.',
+      );
+    } on TimeoutException catch (_) {
+      _scheduleRetry();
+      throw const CloudSyncException(
+        'انتهت مهلة مزامنة البيانات. ستتم إعادة المحاولة تلقائياً.',
       );
     } finally {
       _running = false;
@@ -112,6 +154,9 @@ class CloudSyncService {
       final operation = row['operation']! as String;
       final payload =
           jsonDecode(row['payload']! as String) as Map<String, dynamic>;
+      final createdAt = row['created_at'] is int
+          ? row['created_at']! as int
+          : now;
 
       final ref = _firestore
           .collection('users')
@@ -123,6 +168,7 @@ class CloudSyncService {
         ref,
         {
           ...payload,
+          '_sync_client_updated_at': createdAt,
           '_sync_updated_at': FieldValue.serverTimestamp(),
           '_sync_deleted': operation == 'DELETE',
         },
@@ -153,7 +199,7 @@ class CloudSyncService {
       limit: 1,
     );
 
-    final lastPull = state.isEmpty
+    final savedPull = state.isEmpty
         ? null
         : int.tryParse(state.first['value']?.toString() ?? '');
 
@@ -163,34 +209,67 @@ class CloudSyncService {
         .collection(AppConstants.tableLibrary);
 
     Query<Map<String, dynamic>> query = ref;
-
-    if (lastPull != null && lastPull > 0) {
+    if (savedPull != null && savedPull > 0) {
+      final lowerBound = max(
+        0,
+        savedPull - _pullClockSkew.inMilliseconds,
+      );
       query = ref.where(
         '_sync_updated_at',
-        isGreaterThan: Timestamp.fromMillisecondsSinceEpoch(lastPull),
+        isGreaterThan: Timestamp.fromMillisecondsSinceEpoch(lowerBound),
       );
     }
 
     final snapshot = await query.get();
+    var newestRemoteTimestamp = savedPull ?? 0;
 
     await db.transaction((txn) async {
       for (final doc in snapshot.docs) {
         final data = Map<String, dynamic>.from(doc.data());
-        final mediaType = data['media_type']?.toString();
+        final mediaType = data['media_type']?.toString().trim();
         final id = data['id'] is num
             ? (data['id'] as num).toInt()
             : int.tryParse(data['id']?.toString() ?? '');
 
-        if (mediaType == null || mediaType.isEmpty || id == null || id <= 0) {
+        if (mediaType == null ||
+            mediaType.isEmpty ||
+            id == null ||
+            id <= 0) {
+          continue;
+        }
+
+        final remoteUpdatedAt = _remoteUpdatedAt(data);
+        if (remoteUpdatedAt != null) {
+          newestRemoteTimestamp = max(
+            newestRemoteTimestamp,
+            remoteUpdatedAt,
+          );
+        }
+
+        final key = mediaType + ':' + id.toString();
+        final localRows = await txn.query(
+          AppConstants.tableLibrary,
+          columns: ['updated_at'],
+          where: 'key = ?',
+          whereArgs: [key],
+          limit: 1,
+        );
+
+        final localUpdatedAt = localRows.isEmpty
+            ? null
+            : _asInt(localRows.first['updated_at']);
+
+        if (remoteUpdatedAt != null &&
+            localUpdatedAt != null &&
+            localUpdatedAt >= remoteUpdatedAt) {
           continue;
         }
 
         final deleted = data['_sync_deleted'] == true;
         final clean = Map<String, dynamic>.from(data)
           ..remove('_sync_updated_at')
+          ..remove('_sync_client_updated_at')
           ..remove('_sync_deleted');
-
-        final key = mediaType + ':' + id.toString();
 
         if (deleted) {
           await txn.delete(
@@ -198,23 +277,30 @@ class CloudSyncService {
             where: 'key = ?',
             whereArgs: [key],
           );
-        } else {
-          await txn.insert(
-            AppConstants.tableLibrary,
-            {
-              'key': key,
-              'data': jsonEncode(clean),
-            },
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
+          continue;
         }
+
+        final effectiveUpdatedAt =
+            remoteUpdatedAt ?? DateTime.now().millisecondsSinceEpoch;
+
+        await txn.insert(
+          AppConstants.tableLibrary,
+          {
+            'key': key,
+            'data': jsonEncode(clean),
+            'updated_at': effectiveUpdatedAt,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
       }
     });
 
-    await _setState(
-      'library_last_pull',
-      DateTime.now().millisecondsSinceEpoch.toString(),
-    );
+    if (newestRemoteTimestamp > 0) {
+      await _setState(
+        'library_last_pull',
+        newestRemoteTimestamp.toString(),
+      );
+    }
   }
 
   Future<void> enqueue({
@@ -239,11 +325,67 @@ class CloudSyncService {
         'entity_id': entityId,
         'operation': operation,
         'payload': jsonEncode(payload),
-        'created_at': now,
+        'created_at': DateTime.now().millisecondsSinceEpoch,
         'synced_at': null,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+  }
+
+  void _scheduleRetry() {
+    if (!_started || _auth.currentUser == null) return;
+    if (_retryTimer?.isActive == true) return;
+
+    final exponent = min(_retryAttempt, 8);
+    final baseMilliseconds = _baseBackoff.inMilliseconds * pow(2, exponent);
+    final cappedMilliseconds = min(
+      baseMilliseconds.toInt(),
+      _maxBackoff.inMilliseconds,
+    );
+    final jitter = _random.nextInt(501);
+    final delay = Duration(
+      milliseconds: cappedMilliseconds + jitter,
+    );
+
+    _retryAttempt = min(_retryAttempt + 1, 8);
+    _retryTimer = Timer(delay, () {
+      _retryTimer = null;
+      unawaited(_runSyncSafely());
+    });
+  }
+
+  void _cancelRetry() {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+  }
+
+  bool _isRetryableFirebaseError(FirebaseException error) {
+    const nonRetryable = <String>{
+      'permission-denied',
+      'unauthenticated',
+      'failed-precondition',
+    };
+    return !nonRetryable.contains(error.code);
+  }
+
+  int? _remoteUpdatedAt(Map<String, dynamic> data) {
+    final clientValue = _asInt(data['_sync_client_updated_at']);
+    if (clientValue != null && clientValue > 0) {
+      return clientValue;
+    }
+
+    final serverValue = data['_sync_updated_at'];
+    if (serverValue is Timestamp) {
+      return serverValue.millisecondsSinceEpoch;
+    }
+
+    return null;
+  }
+
+  int? _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
   }
 
   Future<void> dispose() async {
@@ -251,6 +393,7 @@ class CloudSyncService {
     _authSubscription = null;
     _periodicSync?.cancel();
     _periodicSync = null;
+    _cancelRetry();
     _started = false;
   }
 
