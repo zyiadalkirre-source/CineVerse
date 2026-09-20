@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import '../models/chat_message.dart';
 import '../models/media_item.dart';
 import '../services/ai_models.dart';
@@ -23,7 +24,7 @@ class AiProvider extends ChangeNotifier {
   String streamingText = '';
 
   Future<void> loadChat() async {
-    try { messages.addAll(await database.getChat()); } catch (e, st) { debugPrint('AI chat load failed: $e\\n$st'); }
+    try { messages.addAll(await database.getChat()); } catch (e, st) { debugPrint('AI chat load failed: $e\n$st'); }
     notifyListeners();
   }
 
