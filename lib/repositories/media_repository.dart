@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../core/constants.dart';
 import '../models/media_item.dart';
+import '../models/watch_provider.dart';
 import '../services/database_service.dart';
 import '../services/jikan_service.dart';
 import '../services/tmdb_service.dart';
