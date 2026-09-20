@@ -18,40 +18,75 @@ class CloudSyncException implements Exception {
 }
 
 class CloudSyncService {
-  CloudSyncService._();
+  CloudSyncService._({
+    DatabaseService? local,
+    FirebaseFirestore? firestore,
+    FirebaseAuth? auth,
+  })  : _local = local ?? DatabaseService.instance,
+        _firestoreOverride = firestore,
+        _authOverride = auth;
+
   static final instance = CloudSyncService._();
 
-  final DatabaseService _local = DatabaseService.instance;
+  factory CloudSyncService.forTest({
+    required DatabaseService local,
+    required FirebaseFirestore firestore,
+    FirebaseAuth? auth,
+  }) {
+    return CloudSyncService._(
+      local: local,
+      firestore: firestore,
+      auth: auth,
+    );
+  }
+
+  final DatabaseService _local;
+  final FirebaseFirestore? _firestoreOverride;
+  final FirebaseAuth? _authOverride;
+
   StreamSubscription<User?>? _authSubscription;
   bool _running = false;
   bool _started = false;
   Timer? _periodicSync;
 
-  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
+  FirebaseFirestore get _firestore =>
+      _firestoreOverride ?? FirebaseFirestore.instance;
+
+  FirebaseAuth get _auth => _authOverride ?? FirebaseAuth.instance;
 
   void start() {
     if (_started) return;
+
     _started = true;
-    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+    _authSubscription = _auth.authStateChanges().listen((user) {
       if (user != null) unawaited(syncCurrentUser());
     });
+
     _periodicSync = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (FirebaseAuth.instance.currentUser != null) unawaited(syncCurrentUser());
+      if (_auth.currentUser != null) {
+        unawaited(syncCurrentUser());
+      }
     });
   }
 
   Future<void> syncCurrentUser() async {
     if (_running) return;
-    final user = FirebaseAuth.instance.currentUser;
+
+    final user = _auth.currentUser;
     if (user == null) return;
 
     _running = true;
     try {
       await pushOutbox(user.uid);
       await pullLibrary(user.uid);
-      await _setState('last_successful_sync', DateTime.now().millisecondsSinceEpoch.toString());
+      await _setState(
+        'last_successful_sync',
+        DateTime.now().millisecondsSinceEpoch.toString(),
+      );
     } on FirebaseException catch (firebaseError) {
-      throw CloudSyncException('تعذر مزامنة بياناتك مع السحابة حالياً (${firebaseError.code}).');
+      throw CloudSyncException(
+        'تعذر مزامنة بياناتك مع السحابة حالياً (' + firebaseError.code + ').',
+      );
     } finally {
       _running = false;
     }
@@ -65,6 +100,7 @@ class CloudSyncService {
       orderBy: 'created_at ASC',
       limit: 450,
     );
+
     if (rows.isEmpty) return;
 
     final batch = _firestore.batch();
@@ -74,8 +110,14 @@ class CloudSyncService {
       final entityType = row['entity_type']! as String;
       final entityId = row['entity_id']! as String;
       final operation = row['operation']! as String;
-      final payload = jsonDecode(row['payload']! as String) as Map<String, dynamic>;
-      final ref = _firestore.collection('users').doc(uid).collection(entityType).doc(entityId);
+      final payload =
+          jsonDecode(row['payload']! as String) as Map<String, dynamic>;
+
+      final ref = _firestore
+          .collection('users')
+          .doc(uid)
+          .collection(entityType)
+          .doc(entityId);
 
       batch.set(
         ref,
@@ -110,10 +152,18 @@ class CloudSyncService {
       whereArgs: ['library_last_pull'],
       limit: 1,
     );
-    final lastPull = state.isEmpty ? null : int.tryParse(state.first['value']?.toString() ?? '');
-    final ref = _firestore.collection('users').doc(uid).collection(AppConstants.tableLibrary);
+
+    final lastPull = state.isEmpty
+        ? null
+        : int.tryParse(state.first['value']?.toString() ?? '');
+
+    final ref = _firestore
+        .collection('users')
+        .doc(uid)
+        .collection(AppConstants.tableLibrary);
 
     Query<Map<String, dynamic>> query = ref;
+
     if (lastPull != null && lastPull > 0) {
       query = ref.where(
         '_sync_updated_at',
@@ -126,25 +176,45 @@ class CloudSyncService {
     await db.transaction((txn) async {
       for (final doc in snapshot.docs) {
         final data = Map<String, dynamic>.from(doc.data());
+        final mediaType = data['media_type']?.toString();
+        final id = data['id'] is num
+            ? (data['id'] as num).toInt()
+            : int.tryParse(data['id']?.toString() ?? '');
+
+        if (mediaType == null || mediaType.isEmpty || id == null || id <= 0) {
+          continue;
+        }
+
         final deleted = data['_sync_deleted'] == true;
         final clean = Map<String, dynamic>.from(data)
           ..remove('_sync_updated_at')
           ..remove('_sync_deleted');
 
-        final key = '${clean['media_type']}:${clean['id']}';
+        final key = mediaType + ':' + id.toString();
+
         if (deleted) {
-          await txn.delete(AppConstants.tableLibrary, where: 'key = ?', whereArgs: [key]);
+          await txn.delete(
+            AppConstants.tableLibrary,
+            where: 'key = ?',
+            whereArgs: [key],
+          );
         } else {
           await txn.insert(
             AppConstants.tableLibrary,
-            {'key': key, 'data': jsonEncode(clean)},
+            {
+              'key': key,
+              'data': jsonEncode(clean),
+            },
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
         }
       }
     });
 
-    await _setState('library_last_pull', DateTime.now().millisecondsSinceEpoch.toString());
+    await _setState(
+      'library_last_pull',
+      DateTime.now().millisecondsSinceEpoch.toString(),
+    );
   }
 
   Future<void> enqueue({
@@ -158,11 +228,13 @@ class CloudSyncService {
     }
 
     final db = await _local.database;
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final now = DateTime.now().microsecondsSinceEpoch;
+
     await db.insert(
       AppConstants.tableSyncOutbox,
       {
-        'id': '${now}-${entityType}-${entityId}-${operation}',
+        'id':
+            now.toString() + '-' + entityType + '-' + entityId + '-' + operation,
         'entity_type': entityType,
         'entity_id': entityId,
         'operation': operation,
@@ -184,9 +256,14 @@ class CloudSyncService {
 
   Future<void> _setState(String key, String value) async {
     final db = await _local.database;
+
     await db.insert(
       AppConstants.tableSyncState,
-      {'key': key, 'value': value, 'updated_at': DateTime.now().millisecondsSinceEpoch},
+      {
+        'key': key,
+        'value': value,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
