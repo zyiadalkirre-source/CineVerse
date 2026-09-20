@@ -23,6 +23,7 @@ class _WatchScreenState extends State<WatchScreen> {
   bool _initializing = false;
   bool _fullscreen = false;
   String? _error;
+  int _lastSyncedSecond = -1;
   String get _progressKey => 'watch_progress_' + widget.title + '_' + widget.season.toString() + '_' + widget.episode.toString();
 
   @override void initState() { super.initState(); _prepare(); }
@@ -52,8 +53,15 @@ class _WatchScreenState extends State<WatchScreen> {
     final seconds = c.value.position.inSeconds;
     if (seconds > 0) {
       await p.setInt(_progressKey, seconds);
-      if (mounted) {
-        await context.read<MediaProvider>().saveWatchProgress(widget.item, seconds: seconds, season: widget.season, episode: widget.episode, episodeName: widget.episodeName);
+      if (mounted && (seconds - _lastSyncedSecond).abs() >= 5) {
+        _lastSyncedSecond = seconds;
+        await context.read<MediaProvider>().saveWatchProgress(
+          widget.item,
+          seconds: seconds,
+          season: widget.season,
+          episode: widget.episode,
+          episodeName: widget.episodeName,
+        );
       }
     }
   }
