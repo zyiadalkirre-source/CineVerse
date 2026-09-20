@@ -36,6 +36,16 @@ class MediaProvider extends ChangeNotifier {
   }
 
   Future<void> setStatus(MediaItem item, String status) async => upsert(item.copyWith(watchStatus: status));
+  Future<void> toggleFavorite(MediaItem item) async => upsert(item.copyWith(isFavorite: !item.isFavorite));
+  Future<void> saveWatchProgress(MediaItem item, {required int seconds, int? season, int? episode, String? episodeName}) async {
+    await upsert(item.copyWith(
+      lastWatchedSeconds: seconds,
+      lastWatchedSeason: season,
+      lastWatchedEpisode: episode,
+      lastWatchedEpisodeName: episodeName,
+      watchStatus: seconds > 0 ? AppConstants.statusWatching : item.watchStatus,
+    ));
+  }
 
   Future<void> remove(MediaItem item) async {
     _library.removeWhere((x) => x.id == item.id && x.mediaType == item.mediaType);
@@ -120,6 +130,14 @@ class MediaProvider extends ChangeNotifier {
     final r = <MediaItem>[];
     try {
       r.addAll(await tmdb.search(query, lang: lang));
+      if (r.isEmpty || lang != 'en') {
+        try {
+          final english = await tmdb.search(query, lang: 'en');
+          for (final item in english) {
+            if (!r.any((x) => x.id == item.id && x.mediaType == item.mediaType)) r.add(item);
+          }
+        } catch (_) {}
+      }
       if (r.isEmpty) {
         final corrected = _correctQuery(query);
         if (corrected != null) {
