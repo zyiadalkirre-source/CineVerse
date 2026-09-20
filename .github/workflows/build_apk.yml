@@ -76,13 +76,13 @@ jobs:
               text = settings_gradle.read_text()
               import re
               text = re.sub(
-                  r'(id\\("com\\.android\\.application"\\)\\s+version\\s+")([^"]+)(")',
-                  rf'\\g<1>{agp_version}\\g<3>',
+                  r'id\\("com\\.android\\.application"\\)\\s+version\\s+"[^"]+"',
+                  f'id("com.android.application") version "{agp_version}"',
                   text,
               )
               text = re.sub(
-                  r'(id\\("org\\.jetbrains\\.kotlin\\.android"\\)\\s+version\\s+")([^"]+)(")',
-                  rf'\\g<1>{kotlin_version}\\g<3>',
+                  r'id\\("org\\.jetbrains\\.kotlin\\.android"\\)\\s+version\\s+"[^"]+"',
+                  f'id("org.jetbrains.kotlin.android") version "{kotlin_version}"',
                   text,
               )
               # Google Sign-In/Firebase Android support.
