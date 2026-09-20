@@ -38,76 +38,67 @@ jobs:
               --no-pub
           fi
 
-          # The generated Flutter test template references MyApp, while CineVerse has its own app entrypoint.
           rm -f test/widget_test.dart
 
-          # flutter_litert_lm 0.3.0 uses the Kotlin compilerOptions DSL.
-          # Kotlin 1.8.x is too old for that API, so keep the generated Android
-          # project on a compatible Kotlin/Gradle combination.
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           root = Path("android")
           build_gradle = next((p for p in [root / "build.gradle", root / "build.gradle.kts"] if p.exists()), root / "build.gradle")
           settings_gradle = next((p for p in [root / "settings.gradle", root / "settings.gradle.kts"] if p.exists()), root / "settings.gradle")
           app_gradle = next((p for p in [root / "app" / "build.gradle", root / "app" / "build.gradle.kts"] if p.exists()), root / "app" / "build.gradle")
-
-          # Kotlin 2.3.21 requires a modern Android Gradle Plugin; use the same toolchain as flutter_litert_lm.
-          # Flutter 3.22.2 can generate AGP 7.3.0, so patch the generated
-          # Android project and wrapper to a compatible toolchain.
           wrapper_props = root / "gradle" / "wrapper" / "gradle-wrapper.properties"
 
           kotlin_version = "2.3.21"
           agp_version = "8.11.1"
           gradle_version = "8.13"
 
-          # Flutter 3.22 can generate the Kotlin version in either
-          # settings.gradle or the legacy root build.gradle depending on the
-          # template. Patch both forms so CI is deterministic.
           if build_gradle.exists():
               text = build_gradle.read_text()
               text = text.replace("com.android.tools.build:gradle:7.3.0", f"com.android.tools.build:gradle:{agp_version}")
               text = text.replace("com.android.tools.build:gradle:7.4.2", f"com.android.tools.build:gradle:{agp_version}")
               build_gradle.write_text(text)
 
-          # New Flutter templates declare AGP/Kotlin in settings.gradle.kts via the plugins DSL.
-          # Match the actual declarations instead of depending on a particular Flutter template version.
           if settings_gradle.exists():
               text = settings_gradle.read_text()
-              import re
+
               text = re.sub(
                   r'id\("com\.android\.application"\)\s+version\s+"[^"]+"',
                   f'id("com.android.application") version "{agp_version}"',
                   text,
               )
               text = re.sub(
-                  r'id\\("org\\.jetbrains\\.kotlin\\.android"\\)\\s+version\\s+"[^"]+"',
+                  r'id\("org\.jetbrains\.kotlin\.android"\)\s+version\s+"[^"]+"',
                   f'id("org.jetbrains.kotlin.android") version "{kotlin_version}"',
                   text,
               )
-              # Google Sign-In/Firebase Android support.
+
               if 'com.google.gms.google-services' not in text:
                   text = text.replace(
                       'plugins {',
-                      'plugins {\\n    id("com.google.gms.google-services") version "4.4.4" apply false',
+                      'plugins {\n    id("com.google.gms.google-services") version "4.4.4" apply false',
                       1,
                   )
               settings_gradle.write_text(text)
+
           if wrapper_props.exists():
               text = wrapper_props.read_text()
-              import re
-              text = re.sub(r"distributionUrl=.*", f"distributionUrl=https\\://services.gradle.org/distributions/gradle-{gradle_version}-all.zip", text)
+              text = re.sub(
+                  r"distributionUrl=.*",
+                  f"distributionUrl=https\\://services.gradle.org/distributions/gradle-{gradle_version}-all.zip",
+                  text,
+              )
               wrapper_props.write_text(text)
 
           for path in (settings_gradle, build_gradle):
               if path.exists():
                   text = path.read_text()
-                  # Replace common Flutter template Kotlin versions without fragile regex parsing.
                   for old in ("1.7.10", "1.8.22", "2.1.0", "2.2.20"):
                       text = text.replace(f'"{old}"', f'"{kotlin_version}"')
                       text = text.replace(f"'{old}'", f"'{kotlin_version}'")
-                  text = text.replace("org.jetbrains.kotlin.android", "org.jetbrains.kotlin.android")
                   path.write_text(text)
+
           if app_gradle.exists():
               text = app_gradle.read_text()
               if app_gradle.suffix == ".kts":
@@ -122,65 +113,39 @@ jobs:
                       text = text.replace("compileOptions {", "compileOptions {\n        isCoreLibraryDesugaringEnabled = true", 1)
                   if "coreLibraryDesugaring(" not in text:
                       text = text.replace("dependencies {", "dependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")", 1)
-                  app_gradle.write_text(text)
               else:
                   text = text.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
-              text = text.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
-              text = text.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 24")
-              text = text.replace("minSdk = flutter.minSdkVersion", "minSdk = 24")
-              text = text.replace("targetSdkVersion flutter.targetSdkVersion", "targetSdkVersion 36")
-              text = text.replace("targetSdk = flutter.targetSdkVersion", "targetSdk = 36")
-              text = text.replace("ndkVersion flutter.ndkVersion", 'ndkVersion "27.0.12077973"')
-              text = text.replace("ndkVersion = flutter.ndkVersion", 'ndkVersion = "27.0.12077973"')
-              text = text.replace("details.useVersion \"1.8.22\"", f'details.useVersion "{kotlin_version}"')
-              text = text.replace("details.useVersion \"1.7.10\"", f'details.useVersion "{kotlin_version}"')
-              if "coreLibraryDesugaringEnabled true" not in text and "isCoreLibraryDesugaringEnabled = true" not in text:
-                  marker = "android {"
-                  compile_block = """android {
+                  text = text.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 24")
+                  text = text.replace("targetSdkVersion flutter.targetSdkVersion", "targetSdkVersion 36")
+                  text = text.replace("ndkVersion flutter.ndkVersion", 'ndkVersion "27.0.12077973"')
+                  if "coreLibraryDesugaringEnabled true" not in text and "isCoreLibraryDesugaringEnabled = true" not in text:
+                      if "android {" in text:
+                          text = text.replace("android {", """android {
               compileOptions {
                   coreLibraryDesugaringEnabled true
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
-              }"""
-                  if marker in text:
-                      text = text.replace(marker, compile_block, 1)
+              }""", 1)
                   else:
                       raise SystemExit("android/app/build.gradle has no android block")
-              if "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:" not in text and 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:' not in text:
-                  dependency = "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
-                  if "dependencies {" in text:
-                      text = text.replace("dependencies {", "dependencies {\n    " + dependency, 1)
-                  else:
-                      text += "\n\ndependencies {\n    " + dependency + "\n}\n"
-              if "resolutionStrategy.eachDependency" not in text:
-                  block = f"""
-          configurations.all {{
-              resolutionStrategy.eachDependency {{ details ->
-                  if (details.requested.group == "org.jetbrains.kotlin") {{
-                      details.useVersion "{kotlin_version}"
-                  }}
+                  if "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:" not in text:
+                      if "dependencies {" in text:
+                          text = text.replace("dependencies {", "dependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'", 1)
+
+              text += f"""
+          android {{
+              ndkVersion "27.0.12077973"
+              compileOptions {{
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }}
+              kotlinOptions {{
+                  jvmTarget = "17"
               }}
           }}
           """
-                  text += "\n" + block
-              # Explicitly force Java 17, Kotlin 17 and NDK 27 on the generated app module.
-              text += """
-          android {
-              ndkVersion "27.0.12077973"
-              compileOptions {
-                  coreLibraryDesugaringEnabled true
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
-          }
-          """
               app_gradle.write_text(text)
 
-          # Fail early if the Android template did not receive the required
-          # Kotlin version instead of producing a less useful Gradle error.
           combined = ""
           for path in (settings_gradle, build_gradle, app_gradle):
               if path.exists():
@@ -188,23 +153,27 @@ jobs:
 
           if kotlin_version not in combined:
               raise SystemExit("Kotlin 2.3.21 was not applied to the Android project")
+
           agp_applied = (
               f"com.android.tools.build:gradle:{agp_version}" in combined
-              or f'id "com.android.application" version "{agp_version}"' in combined
-              or f"id 'com.android.application' version '{agp_version}'" in combined
+              or re.search(r'id\("com\.android\.application"\)\s+version\s+"' + re.escape(agp_version) + r'"', combined)
+              or re.search(r'id\("com\.android\.application"\)\s+version\s+\'' + re.escape(agp_version) + r"\'", combined)
           )
           if not agp_applied:
+              print("===== DEBUG: generated Gradle files after patch =====")
+              for path in (settings_gradle, build_gradle, app_gradle):
+                  if path.exists():
+                      print(f"===== {path} =====")
+                      print(path.read_text())
               raise SystemExit(f"AGP {agp_version} was not applied to the Android project")
 
           print("Android Gradle project prepared with Kotlin", kotlin_version, "and AGP", agp_version)
           PY
 
-          # Add Firebase Android configuration when the repository secret is provided.
           if [ -n "${FIREBASE_ANDROID_CONFIG_JSON:-}" ]; then
             printf '%s' "$FIREBASE_ANDROID_CONFIG_JSON" > android/app/google-services.json
           fi
 
-                    # Apply the Google Services plugin to the app module when Firebase is configured.
           if [ -f android/app/google-services.json ] && [ -f android/app/build.gradle.kts ]; then
             python3 - <<'PY'
           from pathlib import Path
@@ -216,23 +185,14 @@ jobs:
           PY
           fi
 
-          # LiteRT-LM 0.3.0 ships an AAR containing Java 21 bytecode.
-          # Jetifier bundled with older Android toolchains cannot transform class
-          # file major version 65, and the Flutter/AndroidX project does not need
-          # Jetifier for these dependencies. Keep AndroidX enabled and disable
-          # Jetifier before resolving plugin dependencies.
           python3 - <<'PY'
           from pathlib import Path
-
           props = Path("android/gradle.properties")
           existing = props.read_text() if props.exists() else ""
           lines = [line for line in existing.splitlines()
                    if not line.startswith("android.useAndroidX=")
                    and not line.startswith("android.enableJetifier=")]
-          lines.extend([
-              "android.useAndroidX=true",
-              "android.enableJetifier=false",
-          ])
+          lines.extend(["android.useAndroidX=true", "android.enableJetifier=false"])
           props.write_text("\n".join(lines) + "\n")
           print("AndroidX enabled; Jetifier disabled")
           PY
@@ -287,14 +247,11 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import glob
-
           matches = glob.glob('/home/runner/.pub-cache/hosted/pub.dev/speech_to_text-7.2.0/android/build.gradle')
           if not matches:
               raise SystemExit('speech_to_text 7.2.0 Android build.gradle was not found')
-
           path = Path(matches[0])
           text = path.read_text()
-
           replacements = {
               'compileSdkVersion flutter.compileSdkVersion': 'compileSdkVersion 36',
               'compileSdk = flutter.compileSdkVersion': 'compileSdk = 36',
@@ -306,13 +263,10 @@ jobs:
           }
           for old, new in replacements.items():
               text = text.replace(old, new)
-
           path.write_text(text)
-
           remaining = [token for token in replacements if token in text]
           if remaining:
               raise SystemExit('Unpatched speech_to_text Flutter Gradle references: ' + ', '.join(remaining))
-
           print('Patched', path)
           PY
 
@@ -322,19 +276,16 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import glob
-
           kotlin_version = "2.3.21"
           agp_version = "8.11.1"
           matches = glob.glob('/home/runner/.pub-cache/hosted/pub.dev/flutter_litert_lm-0.3.0/android/build.gradle.kts')
           if not matches:
               raise SystemExit('flutter_litert_lm 0.3.0 Android build.gradle.kts was not found')
-
           path = Path(matches[0])
           text = path.read_text()
           text = text.replace('val kotlinVersion = "2.2.20"', f'val kotlinVersion = "{kotlin_version}"')
           text = text.replace('classpath("com.android.tools.build:gradle:8.11.1")', f'classpath("com.android.tools.build:gradle:{agp_version}")')
           path.write_text(text)
-
           verify = path.read_text()
           if kotlin_version not in verify or agp_version not in verify:
               raise SystemExit('LiteRT-LM Gradle toolchain was not patched correctly')
@@ -347,7 +298,15 @@ jobs:
       - name: Build release APK
         shell: bash
         run: |
-          flutter build apk --release             --dart-define=TMDB_API_KEY="${{ secrets.TMDB_API_KEY }}"             --dart-define=GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"             --dart-define=FIREBASE_API_KEY="${{ secrets.FIREBASE_API_KEY }}"             --dart-define=FIREBASE_APP_ID="${{ secrets.FIREBASE_APP_ID }}"             --dart-define=FIREBASE_MESSAGING_SENDER_ID="${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}"             --dart-define=FIREBASE_PROJECT_ID="${{ secrets.FIREBASE_PROJECT_ID }}"             --dart-define=FIREBASE_AUTH_DOMAIN="${{ secrets.FIREBASE_AUTH_DOMAIN }}"             --dart-define=FIREBASE_STORAGE_BUCKET="${{ secrets.FIREBASE_STORAGE_BUCKET }}"
+          flutter build apk --release \
+            --dart-define=TMDB_API_KEY="${{ secrets.TMDB_API_KEY }}" \
+            --dart-define=GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
+            --dart-define=FIREBASE_API_KEY="${{ secrets.FIREBASE_API_KEY }}" \
+            --dart-define=FIREBASE_APP_ID="${{ secrets.FIREBASE_APP_ID }}" \
+            --dart-define=FIREBASE_MESSAGING_SENDER_ID="${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}" \
+            --dart-define=FIREBASE_PROJECT_ID="${{ secrets.FIREBASE_PROJECT_ID }}" \
+            --dart-define=FIREBASE_AUTH_DOMAIN="${{ secrets.FIREBASE_AUTH_DOMAIN }}" \
+            --dart-define=FIREBASE_STORAGE_BUCKET="${{ secrets.FIREBASE_STORAGE_BUCKET }}"
 
       - name: Verify APK exists
         shell: bash
