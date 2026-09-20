@@ -79,7 +79,8 @@ class MediaProvider extends ChangeNotifier {
         debugPrint('Media notification check failed: $e\n$st');
       }
     } catch (e, st) {
-      error = e.toString();
+      final normalized = _normalizeMediaError(e);
+      error = normalized.message;
       debugPrint('MediaProvider load failed: $e\n$st');
     } finally {
       loading = false;
