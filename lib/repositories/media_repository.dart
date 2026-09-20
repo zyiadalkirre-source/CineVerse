@@ -444,7 +444,9 @@ class MediaRepository {
   ) async {
     try {
       await _refreshCollection(categoryKey, fetchRemote);
-    } catch (_) {}
+    } catch (error, stackTrace) {
+      _emitCollectionError(categoryKey, error, stackTrace);
+    }
   }
 
   void _refreshDetailsInBackground(
@@ -462,7 +464,9 @@ class MediaRepository {
   ) async {
     try {
       await _refreshDetails(key, fetchRemote);
-    } catch (_) {}
+    } catch (error, stackTrace) {
+      _emitDetailsError(key, error, stackTrace);
+    }
   }
 
   Future<MediaItem> _fetchDetails(MediaItem item, String lang) async {
