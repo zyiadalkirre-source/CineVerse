@@ -17,5 +17,69 @@ import 'services/notification_service.dart';
 import 'core/firebase_bootstrap.dart';
 import 'services/auth_service.dart';
 
-Future<void> main() async{WidgetsFlutterBinding.ensureInitialized();if(kIsWeb){databaseFactory=databaseFactoryFfiWeb;}await CacheService.init();await ApiConfig.init();await NotificationService.init();await FirebaseBootstrap.initialize();if(FirebaseBootstrap.configured){await AuthService.instance.initialize();}runApp(const CineVerseApp());}
-class CineVerseApp extends StatelessWidget{const CineVerseApp({super.key});@override Widget build(BuildContext context){return MultiProvider(providers:[ChangeNotifierProvider(create:(_)=>ThemeProvider()),ChangeNotifierProvider(create:(_)=>SettingsProvider()),ChangeNotifierProvider(create:(_)=>MediaProvider()),ChangeNotifierProvider(create:(_)=>AiProvider())],child:Consumer2<ThemeProvider,SettingsProvider>(builder:(context,tp,sp,_){return MaterialApp(title:'CineVerse',debugShowCheckedModeBanner:false,locale:sp.locale,supportedLocales:AppTranslations.supportedLocales,localizationsDelegates:const [AppLocalizations.delegate,GlobalMaterialLocalizations.delegate,GlobalWidgetsLocalizations.delegate,GlobalCupertinoLocalizations.delegate],theme:AppTheme.build(Brightness.light,tp.effectiveSeed),darkTheme:AppTheme.build(Brightness.dark,tp.effectiveSeed),themeMode:sp.themeMode,home:const HomeScreen());}));}}
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  if (kIsWeb) {
+    databaseFactory = databaseFactoryFfiWeb;
+  }
+
+  // Optional startup services must never prevent the UI from launching.
+  try {
+    await CacheService.init();
+  } catch (_) {}
+
+  try {
+    await ApiConfig.init();
+  } catch (_) {}
+
+  try {
+    await NotificationService.init();
+  } catch (_) {}
+
+  await FirebaseBootstrap.initialize();
+
+  if (FirebaseBootstrap.configured) {
+    try {
+      await AuthService.instance.initialize();
+    } catch (_) {}
+  }
+
+  runApp(const CineVerseApp());
+}
+
+class CineVerseApp extends StatelessWidget {
+  const CineVerseApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => MediaProvider()),
+        ChangeNotifierProvider(create: (_) => AiProvider()),
+      ],
+      child: Consumer2<ThemeProvider, SettingsProvider>(
+        builder: (context, tp, sp, _) {
+          return MaterialApp(
+            title: 'CineVerse',
+            debugShowCheckedModeBanner: false,
+            locale: sp.locale,
+            supportedLocales: AppTranslations.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            theme: AppTheme.build(Brightness.light, tp.effectiveSeed),
+            darkTheme: AppTheme.build(Brightness.dark, tp.effectiveSeed),
+            themeMode: sp.themeMode,
+            home: const HomeScreen(),
+          );
+        },
+      ),
+    );
+  }
+}
