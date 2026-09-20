@@ -30,7 +30,14 @@ class _DetailScreenState extends State<DetailScreen> {
   }
   Future<void> _loadEpisodes(int s) async {
     setState(()=>episodesLoading=true);
-    try { final e=await context.read<MediaProvider>().tmdb.getTvEpisodes(item.id,s); if(mounted)setState(()=>episodes=e); }
+    try {
+      final e=await context.read<MediaProvider>().tmdb.getTvEpisodes(item.id,s);
+      if(mounted)setState(() {
+        episodes=e;
+        if (item.lastWatchedSeason == s) selectedEpisodeNumber=item.lastWatchedEpisode;
+        else selectedEpisodeNumber=null;
+      });
+    }
     catch(_){if(mounted)setState(()=>episodes=[]);}
     finally{if(mounted)setState(()=>episodesLoading=false);}
   }
