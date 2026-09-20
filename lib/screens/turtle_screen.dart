@@ -1,8 +1,14 @@
 import 'dart:async';
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_litert_lm/flutter_litert_lm.dart';
+import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../services/turtle_brain.dart';
 
 class TurtleScreen extends StatefulWidget {
@@ -16,6 +22,15 @@ class _TurtleScreenState extends State<TurtleScreen> {
   static const _modelKey = 'turtle_model_path';
   static const _backendKey = 'turtle_backend';
 
+  // Open-license LiteRT-LM model from the litert-community Hugging Face org.
+  // The INT4 no-think variant is about 329 MiB and is intended for fast,
+  // concise on-device replies, especially on CPU.
+  static const _modelUrl =
+      'https://huggingface.co/litert-community/Qwen3-0.6B-int4/resolve/main/'
+      'qwen3_0.6b_nothink_q4_block32_ekv1280.litertlm?download=true';
+  static const _modelFilename =
+      'qwen3_0.6b_nothink_q4_block32_ekv1280.litertlm';
+
   final TurtleBrain _brain = TurtleBrain();
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
@@ -25,6 +40,7 @@ class _TurtleScreenState extends State<TurtleScreen> {
   String _backend = 'cpu';
   bool _loadingModel = false;
   bool _generating = false;
+  double _downloadProgress = 0;
 
   @override
   void initState() {
@@ -64,6 +80,106 @@ class _TurtleScreenState extends State<TurtleScreen> {
     await _loadModel();
   }
 
+  Future<void> _downloadModel() async {
+    if (_loadingModel) return;
+
+    setState(() {
+      _loadingModel = true;
+      _downloadProgress = 0;
+    });
+
+    final client = http.Client();
+    File? tempFile;
+
+    try {
+      final directory = await getApplicationSupportDirectory();
+      final modelFile = File(p.join(directory.path, _modelFilename));
+      tempFile = File('${modelFile.path}.part');
+
+      // Keep the complete model between app launches so it is downloaded once.
+      if (!await modelFile.exists() ||
+          await modelFile.length() < 300 * 1024 * 1024) {
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+
+        final request = http.Request('GET', Uri.parse(_modelUrl));
+        final response = await client.send(request).timeout(
+          const Duration(minutes: 20),
+        );
+
+        if (response.statusCode != 200) {
+          throw HttpException(
+            'تعذر تنزيل نموذج Turtle (HTTP ${response.statusCode}).',
+          );
+        }
+
+        final total = response.contentLength;
+        var received = 0;
+        final sink = tempFile.openWrite();
+
+        try {
+          await for (final chunk in response.stream) {
+            sink.add(chunk);
+            received += chunk.length;
+            if (mounted && total != null && total > 0) {
+              setState(() => _downloadProgress = received / total);
+            }
+          }
+        } finally {
+          await sink.flush();
+          await sink.close();
+        }
+
+        if (total != null && received != total) {
+          throw StateError(
+            'اكتمل تنزيل غير صحيح لنموذج Turtle. حاول التنزيل مرة أخرى.',
+          );
+        }
+
+        if (await modelFile.exists()) {
+          await modelFile.delete();
+        }
+        await tempFile.rename(modelFile.path);
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_modelKey, modelFile.path);
+
+      if (!mounted) return;
+      setState(() {
+        _modelPath = modelFile.path;
+        _downloadProgress = 1;
+      });
+
+      await _loadModel();
+    } catch (e) {
+      if (tempFile != null && await tempFile.exists()) {
+        try {
+          await tempFile.delete();
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        _addAssistant(
+          'تعذر تنزيل نموذج Turtle. تحقق من اتصال الإنترنت ثم حاول مرة أخرى، '
+          'أو استخدم زر اختيار ملف لإدخال نموذج .litertlm موجود مسبقاً.',
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ تنزيل نموذج Turtle: $e')),
+        );
+      }
+    } finally {
+      client.close();
+      if (mounted) {
+        setState(() {
+          _loadingModel = false;
+          _downloadProgress = 0;
+        });
+      }
+    }
+  }
+
   Future<void> _loadModel({bool showMessage = true}) async {
     final path = _modelPath;
     if (path == null || path.isEmpty) return;
@@ -81,7 +197,10 @@ class _TurtleScreenState extends State<TurtleScreen> {
       }
     } catch (e) {
       if (mounted) {
-        _addAssistant('تعذر تحميل النموذج. تأكد أن الملف .litertlm صالح وأن جهازك يدعم الـBackend المختار.');
+        _addAssistant(
+          'تعذر تحميل النموذج. تأكد أن الملف .litertlm صالح '
+          'وأن جهازك يدعم الـBackend المختار.',
+        );
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('خطأ تحميل النموذج: $e')),
         );
@@ -104,7 +223,7 @@ class _TurtleScreenState extends State<TurtleScreen> {
 
     if (!_brain.isReady) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اختر نموذج Turtle أولاً.')),
+        const SnackBar(content: Text('اختر أو حمّل نموذج Turtle أولاً.')),
       );
       return;
     }
@@ -184,6 +303,8 @@ class _TurtleScreenState extends State<TurtleScreen> {
             ready: ready,
             loading: _loadingModel,
             modelPath: _modelPath,
+            downloadProgress: _downloadProgress,
+            onDownload: _downloadModel,
             onPick: _pickModel,
           ),
           Expanded(
@@ -192,7 +313,8 @@ class _TurtleScreenState extends State<TurtleScreen> {
                     child: Padding(
                       padding: EdgeInsets.all(24),
                       child: Text(
-                        '🐢\n\nأنا Turtle، مساعد محلي.\nاختر نموذج .litertlm ثم ابدأ المحادثة.',
+                        '🐢\n\nأنا Turtle، مساعد محلي.\n'
+                        'حمّل النموذج المقترح أو اختر ملف .litertlm من الجهاز.',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 18),
                       ),
@@ -250,36 +372,79 @@ class _TurtleStatus extends StatelessWidget {
   final bool ready;
   final bool loading;
   final String? modelPath;
+  final double downloadProgress;
+  final VoidCallback onDownload;
   final VoidCallback onPick;
 
   const _TurtleStatus({
     required this.ready,
     required this.loading,
     required this.modelPath,
+    required this.downloadProgress,
+    required this.onDownload,
     required this.onPick,
   });
 
   @override
   Widget build(BuildContext context) {
+    final hasProgress = loading && downloadProgress > 0;
+    final percent = (downloadProgress * 100).round();
+
     return Card(
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-      child: ListTile(
-        leading: const CircleAvatar(child: Text('🐢')),
-        title: Text(loading
-            ? 'جاري تحميل Turtle...'
-            : ready
-                ? 'Turtle يعمل محلياً'
-                : 'Turtle غير مُجهّز'),
-        subtitle: Text(
-          modelPath == null
-              ? 'اختر ملف نموذج .litertlm من الجهاز'
-              : modelPath!,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: IconButton(
-          onPressed: loading ? null : onPick,
-          icon: const Icon(Icons.folder_open),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(child: Text('🐢')),
+              title: Text(
+                loading && !hasProgress
+                    ? 'جاري تجهيز Turtle...'
+                    : ready
+                        ? 'Turtle يعمل محلياً'
+                        : 'Turtle غير مُجهّز',
+              ),
+              subtitle: Text(
+                modelPath == null
+                    ? 'لا يوجد نموذج حالياً. النموذج المقترح حوالي 329 MiB.'
+                    : modelPath!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (hasProgress) ...[
+              LinearProgressIndicator(value: downloadProgress),
+              const SizedBox(height: 6),
+              Text('جاري تنزيل النموذج: $percent%'),
+              const SizedBox(height: 8),
+            ],
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: loading ? null : onDownload,
+                  icon: const Icon(Icons.download),
+                  label: Text(
+                    ready ? 'إعادة تنزيل النموذج' : 'تحميل النموذج',
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: loading ? null : onPick,
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('اختيار ملف'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'النموذج يعمل على الجهاز بدون إرسال المحادثة إلى الإنترنت.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
         ),
       ),
     );
