@@ -19,24 +19,37 @@ class MediaProvider extends ChangeNotifier {
 
   List<MediaItem> get library => List.unmodifiable(_library);
 
-  MediaProvider() { _load(); }
+  MediaProvider() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _load();
+    });
+  }
 
   Future<void> _load() async {
+    loading = true;
+    error = null;
+    notifyListeners();
     try {
       _library = await database.getLibrary();
-      notifyListeners();
-      final prefs = await SharedPreferences.getInstance();
-      if (prefs.getBool('notifyNewEpisodes') == true) {
-        await NotificationCenterService.checkForNewEpisodes(
-          favoriteShows: _library.where((x) => x.isFavorite && x.mediaType == AppConstants.typeTv).toList(),
-          tmdb: tmdb,
-          updateItem: upsert,
-        );
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (prefs.getBool('notifyNewEpisodes') == true) {
+          await NotificationCenterService.checkForNewEpisodes(
+            favoriteShows: _library.where((x) => x.isFavorite && x.mediaType == AppConstants.typeTv).toList(),
+            tmdb: tmdb,
+            updateItem: upsert,
+          );
+        }
+      } catch (e, st) {
+        debugPrint('Media notification check failed: $e\\n$st');
       }
-    } catch (e) {
+    } catch (e, st) {
       error = e.toString();
+      debugPrint('MediaProvider load failed: $e\\n$st');
+    } finally {
+      loading = false;
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   Future<void> upsert(MediaItem item) async {
