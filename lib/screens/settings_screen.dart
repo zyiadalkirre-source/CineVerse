@@ -9,6 +9,7 @@ import '../providers/media_provider.dart';
 import 'theme_screen.dart';
 import 'api_setup_screen.dart';
 import 'account_screen.dart';
+import '../services/notification_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -53,6 +54,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(key, value);
+    if (key == 'notifyNewEpisodes' && value) {
+      await NotificationService.requestPermission();
+    }
   }
 
   Future<void> _setSeekSeconds(int value) async {
