@@ -76,7 +76,7 @@ jobs:
               text = settings_gradle.read_text()
               import re
               text = re.sub(
-                  r'id\\("com\\.android\\.application"\\)\\s+version\\s+"[^"]+"',
+                  r'id\("com\.android\.application"\)\s+version\s+"[^"]+"',
                   f'id("com.android.application") version "{agp_version}"',
                   text,
               )
