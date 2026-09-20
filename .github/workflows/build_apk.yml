@@ -268,6 +268,47 @@ jobs:
           fi
 
           echo "Google Services Gradle plugin enabled."
+      - name: Verify Firebase Android configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f android/app/google-services.json ]; then
+            echo "google-services.json is missing for the Android build."
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("android/app/google-services.json")
+          data = json.loads(path.read_text())
+          project = data.get("project_info", {})
+          clients = data.get("client", [])
+          if not project.get("project_id"):
+              raise SystemExit("Firebase project_id is missing from google-services.json")
+          if not clients:
+              raise SystemExit("No Android client exists in google-services.json")
+
+          android_packages = []
+          oauth_clients = 0
+          for client in clients:
+              android = client.get("client_info", {}).get("android_client_info", {})
+              package_name = android.get("package_name")
+              if package_name:
+                  android_packages.append(package_name)
+              oauth_clients += len(
+                  client.get("oauth_client", [])
+              )
+
+          if not android_packages:
+              raise SystemExit("No Android package configuration exists in google-services.json")
+
+          print("Firebase Android configuration is structurally valid.")
+          print("Configured Android package(s):", ", ".join(android_packages))
+          print("OAuth client entries:", oauth_clients)
+          PY
+
       - name: Install Android SDK 36
         shell: bash
         run: |
@@ -358,6 +399,9 @@ jobs:
 
       - name: Analyze Dart code
         run: flutter analyze --no-fatal-infos
+
+      - name: Run Flutter tests
+        run: flutter test
 
       - name: Build release APK
         shell: bash
