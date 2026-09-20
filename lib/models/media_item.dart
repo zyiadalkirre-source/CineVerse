@@ -21,6 +21,11 @@ class MediaItem {
   final String watchStatus;
   final double? userRating;
   final String notes;
+  final bool isFavorite;
+  final int lastWatchedSeconds;
+  final int? lastWatchedSeason;
+  final int? lastWatchedEpisode;
+  final String? lastWatchedEpisodeName;
 
   const MediaItem({
     required this.id, required this.title, this.originalTitle, required this.overview,
@@ -28,6 +33,8 @@ class MediaItem {
     this.releaseDate, required this.mediaType, this.genres = const [], this.cast = const [],
     this.director, this.runtime, this.seasons, this.episodes, this.trailerKey,
     this.watchStatus = 'not_watched', this.userRating, this.notes = '',
+    this.isFavorite = false, this.lastWatchedSeconds = 0, this.lastWatchedSeason,
+    this.lastWatchedEpisode, this.lastWatchedEpisodeName,
   });
 
   String get year => releaseDate != null && releaseDate!.length >= 4 ? releaseDate!.substring(0, 4) : '—';
@@ -62,16 +69,37 @@ class MediaItem {
       watchStatus: (json['watch_status'] ?? 'not_watched').toString(),
       userRating: (json['user_rating'] as num?)?.toDouble(),
       notes: (json['notes'] ?? '').toString(),
+      isFavorite: json['is_favorite'] == true,
+      lastWatchedSeconds: (json['last_watched_seconds'] as num?)?.toInt() ?? 0,
+      lastWatchedSeason: (json['last_watched_season'] as num?)?.toInt(),
+      lastWatchedEpisode: (json['last_watched_episode'] as num?)?.toInt(),
+      lastWatchedEpisodeName: json['last_watched_episode_name']?.toString(),
     );
   }
 
-  MediaItem copyWith({int? id,String? title,String? originalTitle,String? overview,String? posterPath,String? backdropPath,double? voteAverage,int? voteCount,String? releaseDate,String? mediaType,List<String>? genres,List<String>? cast,String? director,int? runtime,int? seasons,int? episodes,String? trailerKey,String? watchStatus,Object? userRating=_copyWithUnset,String? notes}) => MediaItem(
+  MediaItem copyWith({
+    int? id,String? title,String? originalTitle,String? overview,String? posterPath,String? backdropPath,
+    double? voteAverage,int? voteCount,String? releaseDate,String? mediaType,List<String>? genres,List<String>? cast,
+    String? director,int? runtime,int? seasons,int? episodes,String? trailerKey,String? watchStatus,
+    Object? userRating=_copyWithUnset,String? notes,bool? isFavorite,int? lastWatchedSeconds,
+    int? lastWatchedSeason,int? lastWatchedEpisode,String? lastWatchedEpisodeName,
+  }) => MediaItem(
     id:id??this.id,title:title??this.title,originalTitle:originalTitle??this.originalTitle,overview:overview??this.overview,
     posterPath:posterPath??this.posterPath,backdropPath:backdropPath??this.backdropPath,voteAverage:voteAverage??this.voteAverage,
     voteCount:voteCount??this.voteCount,releaseDate:releaseDate??this.releaseDate,mediaType:mediaType??this.mediaType,
     genres:genres??this.genres,cast:cast??this.cast,director:director??this.director,runtime:runtime??this.runtime,
     seasons:seasons??this.seasons,episodes:episodes??this.episodes,trailerKey:trailerKey??this.trailerKey,
-    watchStatus:watchStatus??this.watchStatus,userRating:userRating==_copyWithUnset?this.userRating:userRating as double?,notes:notes??this.notes);
+    watchStatus:watchStatus??this.watchStatus,userRating:userRating==_copyWithUnset?this.userRating:userRating as double?,notes:notes??this.notes,
+    isFavorite:isFavorite??this.isFavorite,lastWatchedSeconds:lastWatchedSeconds??this.lastWatchedSeconds,
+    lastWatchedSeason:lastWatchedSeason??this.lastWatchedSeason,lastWatchedEpisode:lastWatchedEpisode??this.lastWatchedEpisode,
+    lastWatchedEpisodeName:lastWatchedEpisodeName??this.lastWatchedEpisodeName);
 
-  Map<String,dynamic> toJson()=>{'id':id,'title':title,'original_title':originalTitle,'overview':overview,'poster_path':posterPath,'backdrop_path':backdropPath,'vote_average':voteAverage,'vote_count':voteCount,'release_date':releaseDate,'media_type':mediaType,'genres':genres,'cast':cast,'director':director,'runtime':runtime,'number_of_seasons':seasons,'number_of_episodes':episodes,'trailer_key':trailerKey,'watch_status':watchStatus,'user_rating':userRating,'notes':notes};
+  Map<String,dynamic> toJson()=>{
+    'id':id,'title':title,'original_title':originalTitle,'overview':overview,'poster_path':posterPath,'backdrop_path':backdropPath,
+    'vote_average':voteAverage,'vote_count':voteCount,'release_date':releaseDate,'media_type':mediaType,'genres':genres,'cast':cast,
+    'director':director,'runtime':runtime,'number_of_seasons':seasons,'number_of_episodes':episodes,'trailer_key':trailerKey,
+    'watch_status':watchStatus,'user_rating':userRating,'notes':notes,'is_favorite':isFavorite,
+    'last_watched_seconds':lastWatchedSeconds,'last_watched_season':lastWatchedSeason,'last_watched_episode':lastWatchedEpisode,
+    'last_watched_episode_name':lastWatchedEpisodeName,
+  };
 }
