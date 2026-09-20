@@ -325,7 +325,9 @@ class MediaRepository {
     final future = getCollection(
       categoryKey: categoryKey,
       fetchRemote: fetchRemote,
-    ).then<void>((_) {}).catchError((_) {});
+    ).then<void>((_) {}, onError: (Object error, StackTrace stackTrace) {
+      _emitCollectionError(categoryKey, error, stackTrace);
+    });
 
     _collectionPrimers[categoryKey] = future;
     future.whenComplete(() {
@@ -348,7 +350,9 @@ class MediaRepository {
       key: key,
       seed: seed,
       fetchRemote: fetchRemote,
-    ).then<void>((_) {}).catchError((_) {});
+    ).then<void>((_) {}, onError: (Object error, StackTrace stackTrace) {
+      _emitDetailsError(key, error, stackTrace);
+    });
 
     _detailsPrimers[key] = future;
     future.whenComplete(() {
@@ -482,6 +486,26 @@ class MediaRepository {
     controller.add(item);
   }
 
+  void _emitCollectionError(
+    String categoryKey,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    final controller = _collectionControllers[categoryKey];
+    if (controller == null || controller.isClosed) return;
+    controller.addError(error, stackTrace);
+  }
+
+  void _emitDetailsError(
+    String key,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    final controller = _detailsControllers[key];
+    if (controller == null || controller.isClosed) return;
+    controller.addError(error, stackTrace);
+  }
+
   int? _cachedAt(Map<String, dynamic>? row) {
     if (row == null) return null;
     final value = row['cached_at'];
@@ -513,6 +537,20 @@ class MediaRepository {
       unique[item.mediaType + ':' + item.id.toString()] = item;
     }
     return unique.values.toList(growable: false);
+  }
+
+  Future<int> pruneExpiredCache({
+    Duration maxAge = const Duration(days: 7),
+  }) {
+    return _database.pruneExpiredCache(maxAge: maxAge);
+  }
+
+  Future<void> pruneCacheSilently({
+    Duration maxAge = const Duration(days: 7),
+  }) async {
+    try {
+      await pruneExpiredCache(maxAge: maxAge);
+    } catch (_) {}
   }
 
   Future<void> dispose() async {
