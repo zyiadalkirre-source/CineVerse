@@ -25,6 +25,7 @@ class CloudSyncService {
   StreamSubscription<User?>? _authSubscription;
   bool _running = false;
   bool _started = false;
+  Timer? _periodicSync;
 
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
@@ -33,6 +34,9 @@ class CloudSyncService {
     _started = true;
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
       if (user != null) unawaited(syncCurrentUser());
+    });
+    _periodicSync = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (FirebaseAuth.instance.currentUser != null) unawaited(syncCurrentUser());
     });
   }
 
@@ -173,6 +177,8 @@ class CloudSyncService {
   Future<void> dispose() async {
     await _authSubscription?.cancel();
     _authSubscription = null;
+    _periodicSync?.cancel();
+    _periodicSync = null;
     _started = false;
   }
 
