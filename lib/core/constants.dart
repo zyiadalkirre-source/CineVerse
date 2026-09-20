@@ -3,6 +3,7 @@ class AppConstants {
   // API keys are read from --dart-define and are never hard-coded in source.
   static const String tmdbApiKey = String.fromEnvironment('TMDB_API_KEY');
   static const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
+  static const String videoSourceBaseUrl = String.fromEnvironment('VIDEO_SOURCE_BASE_URL');
 
   static const String tmdbBaseUrl = 'https://api.themoviedb.org/3';
   static const String tmdbImageW500 = 'https://image.tmdb.org/t/p/w500';
