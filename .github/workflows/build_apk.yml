@@ -195,6 +195,22 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text() if manifest.exists() else ""
+          permission = '<uses-permission android:name="android.permission.INTERNET"/>'
+          if permission not in text:
+              text = text.replace(
+                  "<manifest",
+                  "<manifest\n    " + permission,
+                  1,
+              )
+              manifest.write_text(text)
+          print("Android INTERNET permission ensured")
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
           props = Path("android/gradle.properties")
           existing = props.read_text() if props.exists() else ""
           lines = [line for line in existing.splitlines()
@@ -221,9 +237,13 @@ jobs:
           set -euo pipefail
 
           if [ -n "${GOOGLE_SERVICES_JSON:-}" ]; then
-            printf '%s' "$GOOGLE_SERVICES_JSON" | base64 --decode > android/app/google-services.json
-            python3 -m json.tool android/app/google-services.json >/dev/null
-            echo "google-services.json injected from GOOGLE_SERVICES_JSON."
+            if printf '%s' "$GOOGLE_SERVICES_JSON" | base64 --decode > android/app/google-services.json 2>/dev/null               && python3 -m json.tool android/app/google-services.json >/dev/null 2>&1; then
+              echo "google-services.json injected from GOOGLE_SERVICES_JSON (base64)."
+            else
+              printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+              python3 -m json.tool android/app/google-services.json >/dev/null
+              echo "google-services.json injected from GOOGLE_SERVICES_JSON (raw JSON)."
+            fi
           elif [ -n "${FIREBASE_ANDROID_CONFIG_JSON:-}" ]; then
             printf '%s' "$FIREBASE_ANDROID_CONFIG_JSON" > android/app/google-services.json
             python3 -m json.tool android/app/google-services.json >/dev/null
@@ -279,6 +299,7 @@ jobs:
 
           python3 - <<'PY'
           import json
+          import re
           from pathlib import Path
 
           path = Path("android/app/google-services.json")
@@ -303,6 +324,25 @@ jobs:
 
           if not android_packages:
               raise SystemExit("No Android package configuration exists in google-services.json")
+
+          application_id = None
+          for gradle_path in (
+              Path("android/app/build.gradle.kts"),
+              Path("android/app/build.gradle"),
+          ):
+              if gradle_path.exists():
+                  gradle_text = gradle_path.read_text()
+                  match = re.search(r'applicationId\s*[=]?\s*["\']([^"\']+)["\']', gradle_text)
+                  if match:
+                      application_id = match.group(1)
+                      break
+
+          if application_id and application_id not in android_packages:
+              raise SystemExit(
+                  "google-services.json does not contain the Android applicationId "
+                  + application_id
+                  + ". Add that exact Android package to Firebase and download a new google-services.json."
+              )
 
           oauth_client_types = []
           for client in clients:
