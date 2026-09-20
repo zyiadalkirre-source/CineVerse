@@ -32,7 +32,7 @@ class _WatchScreenState extends State<WatchScreen> {
   Future<void> _prepare() async {
     _prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
-    final episodeSaved = await mediaProvider.getEpisodeProgress(
+    final episodeSaved = await _mediaProvider.getEpisodeProgress(
       item: widget.item,
       season: widget.season,
       episode: widget.episode,
