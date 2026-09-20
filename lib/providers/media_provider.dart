@@ -9,6 +9,8 @@ import '../models/media_item.dart';
 import '../models/user_stats.dart';
 import '../services/database_service.dart';
 import '../services/notification_center_service.dart';
+import '../services/tmdb_service.dart';
+import '../models/watch_provider.dart';
 import '../repositories/media_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -527,6 +529,57 @@ class MediaProvider extends ChangeNotifier {
     );
   }
 
+  Future<List<Map<String, dynamic>>> getTvEpisodes(
+    int id,
+    int season, {
+    String lang = 'ar',
+  }) {
+    return _repository.getTvEpisodes(id, season, lang: lang);
+  }
+
+  Future<List<Map<String, dynamic>>> getEpisodeVideos(
+    int tvId,
+    int season,
+    int episode, {
+    String? lang,
+  }) {
+    return _repository.getEpisodeVideos(
+      tvId,
+      season,
+      episode,
+      lang: lang,
+    );
+  }
+
+  Future<List<WatchProvider>> getWatchProviders(
+    MediaItem item, {
+    String region = 'SY',
+  }) {
+    return _repository.getWatchProviders(
+      item.id,
+      item.mediaType,
+      region: region,
+    );
+  }
+
+  String? findYoutubeTrailerKey(List<Map<String, dynamic>> videos) {
+    return _repository.findYoutubeTrailerKey(videos);
+  }
+
+  Future<List<MediaItem>> seasonalNow() {
+    return _repository.getSeasonalAnime();
+  }
+
+  Future<List<MediaItem>> latestUpdates({
+    String lang = 'ar',
+    bool forceRefresh = false,
+  }) {
+    return _repository.getLatestUpdates(
+      lang: lang,
+      forceRefresh: forceRefresh,
+    );
+  }
+
   UserStats get stats {
     final watched = _library.where((x) => x.watchStatus == AppConstants.statusWatched).toList();
     final watching = _library.where((x) => x.watchStatus == AppConstants.statusWatching).length;
@@ -552,7 +605,6 @@ class MediaProvider extends ChangeNotifier {
       topGenres: top(genres), topActors: top(actors),
     );
   }
-}
 
   @override
   void dispose() {
@@ -567,7 +619,7 @@ class MediaProvider extends ChangeNotifier {
 
     super.dispose();
   }
-
+}
 
 class _NormalizedMediaError {
   const _NormalizedMediaError({
