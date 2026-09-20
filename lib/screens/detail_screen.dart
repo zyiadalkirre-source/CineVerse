@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'watch_screen.dart';
 import '../core/constants.dart';
 import '../models/media_item.dart';
 import '../providers/media_provider.dart';
@@ -67,7 +68,7 @@ class _DetailScreenState extends State<DetailScreen> {
           const SizedBox(height:22),Text('الحلقات',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold)),
           DropdownButton<int>(value:season,items:List.generate(item.seasons!, (i)=>DropdownMenuItem(value:i+1,child:Text('الموسم '+(i+1).toString()))),onChanged:(v){if(v!=null){setState(()=>season=v);_loadEpisodes(v);}}),
           if(episodesLoading)const LinearProgressIndicator(),
-          ...episodes.map((e)=>Card(child:ListTile(leading:CircleAvatar(child:Text((e['episode_number']??'').toString())),title:Text((e['name']??'حلقة').toString()),subtitle:Text('التقييم: '+_episodeRating(e)+' • '+(e['air_date']??'—').toString()),))),
+          ...episodes.map((e)=>Card(clipBehavior:Clip.antiAlias,child:ListTile(onTap:()=>_openEpisode(e),leading:CircleAvatar(child:Text((e['episode_number']??'').toString())),title:Text((e['name']??'حلقة').toString()),subtitle:Text('التقييم: '+_episodeRating(e)+' • '+(e['air_date']??'—').toString()),trailing:const Icon(Icons.play_circle_fill)))),
         ],
         const SizedBox(height:16),
         Wrap(spacing:8,children:[ElevatedButton.icon(onPressed:_note,icon:const Icon(Icons.note_add),label:const Text('ملاحظة')),ElevatedButton.icon(onPressed:loading?null:_ai,icon:const Icon(Icons.auto_awesome),label:const Text('تحليل AI')),if(item.trailerKey!=null)IconButton(onPressed:()=>launchUrl(Uri.parse('https://www.youtube.com/watch?v='+item.trailerKey!)),icon:const Icon(Icons.play_circle))]),
@@ -75,6 +76,8 @@ class _DetailScreenState extends State<DetailScreen> {
       ]))),
     ]));
   }
+  void _openEpisode(Map<String,dynamic> episode){final url=_episodeWatchUrl(episode);Navigator.of(context).push(MaterialPageRoute(builder:(_)=>WatchScreen(title:item.title,episodeName:(episode['name']??'حلقة').toString(),season:season,episode:(episode['episode_number'] as num?)?.toInt()??0,videoUrl:url)));}
+  String? _episodeWatchUrl(Map<String,dynamic> episode){for(final key in const ['watch_url','video_url','stream_url','playback_url']){final value=episode[key]?.toString().trim();if(value!=null&&value.isNotEmpty)return value;}return null;}
   String _episodeRating(Map<String,dynamic> e){final value=e['vote_average'];return value is num?value.toStringAsFixed(1):'—';}
   Widget _statusButton(String l,String s)=>Expanded(child:Padding(padding:const EdgeInsets.only(right:4),child:OutlinedButton(onPressed:()=>_status(s),child:Text(l))));
 }
