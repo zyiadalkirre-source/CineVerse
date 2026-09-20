@@ -7,12 +7,14 @@ import '../services/database_service.dart';
 import '../services/tmdb_service.dart';
 import '../services/jikan_service.dart';
 import '../services/notification_center_service.dart';
+import '../repositories/media_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MediaProvider extends ChangeNotifier {
   final TmdbService tmdb = TmdbService();
   final JikanService jikan = JikanService();
   final DatabaseService database = DatabaseService.instance;
+  late final MediaRepository repository;
   List<MediaItem> _library = [];
   bool loading = false;
   String? error;
@@ -21,6 +23,11 @@ class MediaProvider extends ChangeNotifier {
   List<MediaItem> get library => List.unmodifiable(_library);
 
   MediaProvider() {
+    repository = MediaRepository(
+      database: database,
+      tmdb: tmdb,
+      jikan: jikan,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _load();
     });
@@ -105,7 +112,7 @@ class MediaProvider extends ChangeNotifier {
     for (final item in items) {
       final i = _library.indexWhere((x) => x.id == item.id && x.mediaType == item.mediaType);
       if (i >= 0) _library[i] = item; else _library.add(item);
-      await database.saveMedia(item);
+      await database.saveMedia(item, enqueueSync: false);
     }
     notifyListeners();
   }
@@ -173,60 +180,54 @@ class MediaProvider extends ChangeNotifier {
     final query = q.trim();
     if (query.isEmpty) return [];
 
-    final r = <MediaItem>[];
     try {
-      r.addAll(await tmdb.search(query, lang: lang));
-      if (r.isEmpty || lang != 'en') {
-        try {
-          final english = await tmdb.search(query, lang: 'en');
-          for (final item in english) {
-            if (!r.any((x) => x.id == item.id && x.mediaType == item.mediaType)) r.add(item);
-          }
-        } catch (_) {}
-      }
-      if (r.isEmpty) {
+      var results = await repository.search(query, lang: lang);
+
+      if (results.isEmpty) {
         final corrected = _correctQuery(query);
         if (corrected != null) {
-          final correctedResults = await tmdb.search(corrected, lang: lang);
+          final correctedResults = await repository.search(
+            corrected,
+            lang: lang,
+            forceRefresh: true,
+          );
           if (correctedResults.isNotEmpty) {
             lastCorrectedQuery = corrected;
-            r.addAll(correctedResults);
+            results = correctedResults;
           }
         }
       }
-    } catch (e) {
+
+      await database.addSearch(query);
+      return results;
+    } catch (e, st) {
       error = e.toString();
+      debugPrint('MediaProvider search failed: $e\n$st');
+      return [];
     }
-
-    try {
-      if (r.isEmpty) r.addAll(await jikan.searchAnime(query));
-    } catch (_) {}
-
-    await database.addSearch(query);
-    return r;
   }
 
   Future<List<MediaItem>> trending(String lang) async {
-    loading = true; notifyListeners();
-    try { return await tmdb.getTrending(lang: lang); }
-    finally { loading = false; notifyListeners(); }
+    loading = true;
+    notifyListeners();
+    try {
+      return await repository.getTrending(lang: lang);
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
   }
 
-  Future<List<MediaItem>> topRated(String lang) async {
-    try { return await tmdb.getTopRated(lang: lang); } catch (_) { return []; }
-  }
+  Future<List<MediaItem>> topRated(String lang) =>
+      repository.getTopRated(lang: lang);
 
-  Future<List<MediaItem>> topAnime() => jikan.topAnime();
+  Future<List<MediaItem>> topAnime() => repository.getTopAnime();
 
-  Future<List<MediaItem>> recommendations(MediaItem item, String lang) async {
-    if (item.mediaType == 'anime') return jikan.topAnime();
-    try { return await tmdb.getRecommendations(item.id, item.mediaType, lang: lang); } catch (_) { return []; }
-  }
+  Future<List<MediaItem>> recommendations(MediaItem item, String lang) =>
+      repository.getRecommendations(item, lang: lang);
 
-  Future<MediaItem> details(MediaItem item, String lang) async {
-    if (item.mediaType == 'anime') return item;
-    try { return await tmdb.getDetails(item.id, item.mediaType, lang: lang); } catch (_) { return item; }
-  }
+  Future<MediaItem> details(MediaItem item, String lang) =>
+      repository.getDetails(item, lang: lang);
 
   UserStats get stats {
     final watched = _library.where((x) => x.watchStatus == AppConstants.statusWatched).toList();
