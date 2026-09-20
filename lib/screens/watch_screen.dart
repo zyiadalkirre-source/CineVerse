@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
+import '../models/media_item.dart';
+import '../providers/media_provider.dart';
+import 'package:provider/provider.dart';
 
 class WatchScreen extends StatefulWidget {
+  final MediaItem item;
   final String title;
   final String episodeName;
   final int season;
   final int episode;
   final String? videoUrl;
-  const WatchScreen({super.key, required this.title, required this.episodeName, required this.season, required this.episode, required this.videoUrl});
+  const WatchScreen({super.key, required this.item, required this.title, required this.episodeName, required this.season, required this.episode, required this.videoUrl});
   @override State<WatchScreen> createState() => _WatchScreenState();
 }
 
@@ -24,7 +28,7 @@ class _WatchScreenState extends State<WatchScreen> {
   @override void initState() { super.initState(); _prepare(); }
   Future<void> _prepare() async {
     _prefs = await SharedPreferences.getInstance();
-    final saved = _prefs?.getInt(_progressKey) ?? 0;
+    final saved = widget.item.lastWatchedSeconds > 0 ? widget.item.lastWatchedSeconds : (_prefs?.getInt(_progressKey) ?? 0);
     if (widget.videoUrl == null || widget.videoUrl!.trim().isEmpty) { if (mounted) setState(() => _error = 'لا يوجد مصدر مشاهدة فعلي لهذه الحلقة حالياً.'); return; }
     final uri = Uri.tryParse(widget.videoUrl!);
     if (uri == null || !uri.hasScheme) { if (mounted) setState(() => _error = 'رابط المشاهدة غير صالح.'); return; }
@@ -46,7 +50,12 @@ class _WatchScreenState extends State<WatchScreen> {
     final c = _controller; final p = _prefs;
     if (c == null || p == null || !c.value.isInitialized) return;
     final seconds = c.value.position.inSeconds;
-    if (seconds > 0) await p.setInt(_progressKey, seconds);
+    if (seconds > 0) {
+      await p.setInt(_progressKey, seconds);
+      if (mounted) {
+        await context.read<MediaProvider>().saveWatchProgress(widget.item, seconds: seconds, season: widget.season, episode: widget.episode, episodeName: widget.episodeName);
+      }
+    }
   }
   Future<void> _seek(int seconds) async {
     final c = _controller; if (c == null || !c.value.isInitialized) return;
