@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../core/constants.dart';
+import '../models/media_item.dart';
 import 'database_service.dart';
 
 class CloudSyncException implements Exception {
@@ -386,6 +387,23 @@ class CloudSyncService {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.tryParse(value?.toString() ?? '');
+  }
+
+  /// Backwards-compatible manual sync entry point.
+  ///
+  /// Library changes are already persisted through DatabaseService and the
+  /// outbox, so the argument is intentionally not written again here.
+  Future<void> syncLibrary(List<MediaItem> library) async {
+    await syncCurrentUser();
+  }
+
+  /// Pulls the current user's library and returns the resulting local state.
+  Future<List<MediaItem>> downloadLibrary() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      await pullLibrary(user.uid);
+    }
+    return _local.getLibrary();
   }
 
   Future<void> dispose() async {
