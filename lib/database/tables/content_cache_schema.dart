@@ -26,12 +26,12 @@ CREATE TABLE $trendingCacheTable (
 
   static const String createMediaCacheIndex = '''
 CREATE INDEX IF NOT EXISTS idx_media_cache_cached_at
-ON \$mediaCacheTable(cached_at)
+ON $mediaCacheTable(cached_at)
 ''';
 
   static const String createTrendingCacheIndex = '''
 CREATE INDEX IF NOT EXISTS idx_trending_cache_cached_at
-ON \$trendingCacheTable(cached_at)
+ON $trendingCacheTable(cached_at)
 ''';
 
   static Future<void> create(Database db) async {
