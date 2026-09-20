@@ -165,7 +165,7 @@ class _LibraryState extends State<_Library> {
         SliverToBoxAdapter(child:_SectionHeader(title:filter=='all'?'كل مكتبتك':'نتائج الفلترة',icon:Icons.video_library)),
         SliverPadding(padding:const EdgeInsets.fromLTRB(16,0,16,20),sliver:SliverGrid(
           gridDelegate:const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent:170,mainAxisExtent:265,crossAxisSpacing:12,mainAxisSpacing:14),
-          delegate:SliverChildBuilderDelegate((_,i)=>_MediaCard(_filtered(provider.library)[i]),childCount:_filtered(provider.library).length),
+          delegate:SliverChildBuilderDelegate((_,i)=>_DismissibleMediaCard(item: _filtered(provider.library)[i]),childCount:_filtered(provider.library).length),
         )),
       ] else const SliverFillRemaining(hasScrollBody: false, child: Center(child: Padding(padding: EdgeInsets.all(32), child: Text('مكتبتك فاضية حالياً\nابحث عن فيلم أو مسلسل وأضفه هون.', textAlign: TextAlign.center, style: TextStyle(fontSize: 17))))),
     ]);
@@ -177,7 +177,7 @@ class _HorizontalSection extends StatelessWidget {
   const _HorizontalSection({required this.title,required this.icon,required this.items});
   @override Widget build(BuildContext context)=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
     _SectionHeader(title:title,icon:icon),
-    SizedBox(height:220,child:ListView.separated(padding:const EdgeInsets.symmetric(horizontal:16),scrollDirection:Axis.horizontal,itemCount:items.length,separatorBuilder:(_,__)=>const SizedBox(width:12),itemBuilder:(_,i)=>SizedBox(width:125,child:_MediaCard(items[i])))),
+    SizedBox(height:220,child:ListView.separated(padding:const EdgeInsets.symmetric(horizontal:16),scrollDirection:Axis.horizontal,itemCount:items.length,separatorBuilder:(_,__)=>const SizedBox(width:12),itemBuilder:(_,i)=>SizedBox(width:125,child:_DismissibleMediaCard(item: items[i])))),
     const SizedBox(height:8),
   ]);
 }
@@ -204,6 +204,53 @@ class _DiscoverState extends State<_Discover> {
     return GridView.builder(padding: const EdgeInsets.all(12), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: .62), itemCount: items.length, itemBuilder: (_, i) => _MediaCard(items[i]));
   }
 }
+class _DismissibleMediaCard extends StatelessWidget {
+  final MediaItem item;
+  const _DismissibleMediaCard({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dismissible(
+      key: ValueKey('${item.mediaType}:${item.id}'),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) async {
+        final provider = context.read<MediaProvider>();
+        if (provider.getById(item.id, item.mediaType) == null) return false;
+        return true;
+      },
+      background: Container(
+        margin: const EdgeInsets.symmetric(vertical: 2),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.errorContainer,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        child: Icon(
+          Icons.delete_outline_rounded,
+          color: Theme.of(context).colorScheme.onErrorContainer,
+        ),
+      ),
+      onDismissed: (_) async {
+        final provider = context.read<MediaProvider>();
+        await provider.remove(item);
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('تمت إزالة «${item.title}» من مكتبتك'),
+            action: SnackBarAction(
+              label: 'تراجع',
+              onPressed: () => provider.upsert(item),
+            ),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      },
+      child: _MediaCard(item),
+    );
+  }
+}
+
 class _MediaCard extends StatelessWidget {
   final MediaItem item;
   const _MediaCard(this.item);
