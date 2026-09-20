@@ -17,6 +17,7 @@ import 'services/cache_service.dart';
 import 'services/notification_service.dart';
 import 'core/firebase_bootstrap.dart';
 import 'services/auth_service.dart';
+import 'services/cloud_sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +44,7 @@ Future<void> main() async {
   if (FirebaseBootstrap.configured) {
     try {
       await AuthService.instance.initialize();
+      CloudSyncService.instance.start();
     } catch (_) {}
   }
 
