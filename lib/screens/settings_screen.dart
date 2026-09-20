@@ -5,11 +5,13 @@ import 'package:share_plus/share_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../providers/settings_provider.dart';
+import '../providers/media_provider.dart';
 import '../providers/theme_provider.dart';
 import 'theme_screen.dart';
 import 'api_setup_screen.dart';
 import 'account_screen.dart';
 import '../services/notification_service.dart';
+import '../services/backup_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -125,6 +127,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _exportBackup() async {
+    try {
+      final library = context.read<MediaProvider>().library;
+      await BackupService.exportLibrary(library);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تجهيز النسخة الاحتياطية للمشاركة.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذر إنشاء النسخة الاحتياطية: $e')),
+      );
+    }
+  }
+
+  Future<void> _importBackup() async {
+    try {
+      final items = await BackupService.importLibrary();
+      if (items == null || items.isEmpty) return;
+      if (!mounted) return;
+
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('استعادة النسخة الاحتياطية'),
+          content: Text(
+            'سيتم دمج ${items.length} عمل مع مكتبتك الحالية. لن يتم حذف العناصر الموجودة.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('استعادة'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true || !mounted) return;
+      await context.read<MediaProvider>().mergeCloudLibrary(items);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تمت استعادة ${items.length} عمل بنجاح.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذر استعادة النسخة الاحتياطية: $e')),
+      );
+    }
+  }
+
   void _showInfoDialog({
     required String title,
     required String message,
@@ -238,6 +296,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 context,
                 MaterialPageRoute(builder: (_) => const ThemeScreen()),
               ),
+            ),
+
+            _sectionTitle(context, 'البيانات'),
+
+            ListTile(
+              leading: const Icon(Icons.backup_outlined),
+              title: const Text('نسخ احتياطي للمكتبة'),
+              subtitle: const Text('حفظ مكتبتك كملف JSON ومشاركته'),
+              trailing: const Icon(Icons.chevron_left_rounded),
+              onTap: _exportBackup,
+            ),
+
+            ListTile(
+              leading: const Icon(Icons.restore_rounded),
+              title: const Text('استعادة مكتبة'),
+              subtitle: const Text('دمج نسخة CineVerse احتياطية مع مكتبتك'),
+              trailing: const Icon(Icons.chevron_left_rounded),
+              onTap: _importBackup,
             ),
 
             _sectionTitle(context, 'اخرى'),
