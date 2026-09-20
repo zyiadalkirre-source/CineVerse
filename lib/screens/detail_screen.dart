@@ -33,7 +33,17 @@ class _DetailScreenState extends State<DetailScreen> {
     catch(_){if(mounted)setState(()=>episodes=[]);}
     finally{if(mounted)setState(()=>episodesLoading=false);}
   }
-  Future<void> _status(String s)async{await context.read<MediaProvider>().setStatus(item,s);if(mounted)setState(()=>item=item.copyWith(watchStatus:s));}
+  Future<void> _status(String s) async {
+    final provider = context.read<MediaProvider>();
+    final inLibrary = provider.getById(item.id, item.mediaType) != null;
+    if (s == AppConstants.statusNotWatched && inLibrary) {
+      await provider.remove(item);
+      if (mounted) setState(() => item = item.copyWith(watchStatus: AppConstants.statusNotWatched));
+      return;
+    }
+    await provider.setStatus(item, s);
+    if (mounted) setState(() => item = item.copyWith(watchStatus: s));
+  }
   Future<void> _note()async{final c=TextEditingController(text:item.notes);final ok=await showDialog<bool>(context:context,builder:(_)=>AlertDialog(title:const Text('ملاحظتي'),content:TextField(controller:c,maxLines:5),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('إلغاء')),ElevatedButton(onPressed:()=>Navigator.pop(context,true),child:const Text('حفظ'))]));if(ok==true){await context.read<MediaProvider>().setNotes(item,c.text);if(mounted)setState(()=>item=item.copyWith(notes:c.text));}c.dispose();}
   Future<void> _ai()async{setState(()=>loading=true);try{final x=await context.read<AiProvider>().summarize(item);if(mounted)showDialog(context:context,builder:(_)=>AlertDialog(title:const Text('ملخص AI'),content:SingleChildScrollView(child:Text(x.summary)),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('إغلاق'))]));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}finally{if(mounted)setState(()=>loading=false);}}
   @override Widget build(BuildContext context){
@@ -79,5 +89,14 @@ class _DetailScreenState extends State<DetailScreen> {
   void _openEpisode(Map<String,dynamic> episode){final url=_episodeWatchUrl(episode);Navigator.of(context).push(MaterialPageRoute(builder:(_)=>WatchScreen(title:item.title,episodeName:(episode['name']??'حلقة').toString(),season:season,episode:(episode['episode_number'] as num?)?.toInt()??0,videoUrl:url)));}
   String? _episodeWatchUrl(Map<String,dynamic> episode){for(final key in const ['watch_url','video_url','stream_url','playback_url']){final value=episode[key]?.toString().trim();if(value!=null&&value.isNotEmpty)return value;}return null;}
   String _episodeRating(Map<String,dynamic> e){final value=e['vote_average'];return value is num?value.toStringAsFixed(1):'—';}
-  Widget _statusButton(String l,String s)=>Expanded(child:Padding(padding:const EdgeInsets.only(right:4),child:OutlinedButton(onPressed:()=>_status(s),child:Text(l))));
+  Widget _statusButton(String l,String s){
+    final selected = item.watchStatus == s && (s != AppConstants.statusNotWatched || context.read<MediaProvider>().getById(item.id,item.mediaType) != null);
+    final isList = s == AppConstants.statusNotWatched;
+    return Expanded(child:Padding(padding:const EdgeInsets.only(right:4),child:OutlinedButton.icon(
+      onPressed:()=>_status(s),
+      icon:Icon(selected ? Icons.check_circle : (isList && context.read<MediaProvider>().getById(item.id,item.mediaType)==null ? Icons.add : Icons.remove_done),size:18),
+      label:Text(selected ? (isList ? 'بالقائمة' : l) : (isList ? 'إضافة' : l)),
+      style:OutlinedButton.styleFrom(backgroundColor:selected ? Theme.of(context).colorScheme.primaryContainer : null,foregroundColor:selected ? Theme.of(context).colorScheme.onPrimaryContainer : null),
+    )));
+  }
 }
