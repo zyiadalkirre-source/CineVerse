@@ -38,7 +38,7 @@ class _DetailScreenState extends State<DetailScreen> {
   @override Widget build(BuildContext context){
     final tv=item.mediaType=='tv';
     return Scaffold(body:CustomScrollView(slivers:[
-      SliverAppBar(expandedHeight:300,pinned:true,flexibleSpace:FlexibleSpaceBar(title:Text(item.title,maxLines:1,overflow:TextOverflow.ellipsis),background:item.backdropUrl==null?Container(color:Theme.of(context).colorScheme.surfaceContainerHighest):Image.network(item.backdropUrl!,fit:BoxFit.cover,errorBuilder:(_,__,___)=>Container(color:Theme.of(context).colorScheme.surfaceContainerHighest))))),
+      SliverAppBar(expandedHeight:300,pinned:true,flexibleSpace:FlexibleSpaceBar(title:Text(item.title,maxLines:1,overflow:TextOverflow.ellipsis),background:item.backdropUrl==null?Container(color:Theme.of(context).colorScheme.surfaceContainerHighest):Image.network(item.backdropUrl!,fit:BoxFit.cover,errorBuilder:(_,__,___)=>Container(color:Theme.of(context).colorScheme.surfaceContainerHighest)))),
       SliverToBoxAdapter(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
           if(item.posterUrl!=null)ClipRRect(borderRadius:BorderRadius.circular(14),child:Image.network(item.posterUrl!,width:105,height:155,fit:BoxFit.cover)),
