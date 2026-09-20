@@ -26,6 +26,8 @@ class _WatchScreenState extends State<WatchScreen> {
   bool _fullscreen = false;
   String? _error;
   int _lastSyncedSecond = -1;
+  DateTime _lastLocalSave = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _savingPosition = false;
   String get _progressKey => 'watch_progress_${widget.title}_${widget.season}_${widget.episode}';
 
   @override void initState() { super.initState(); _mediaProvider = context.read<MediaProvider>(); _prepare(); }
@@ -72,9 +74,22 @@ class _WatchScreenState extends State<WatchScreen> {
     final c = _controller; final p = _prefs;
     if (c == null || p == null || !c.value.isInitialized) return;
     final seconds = c.value.position.inSeconds;
-    if (seconds > 0) {
-      await p.setInt(_progressKey, seconds);
-      if (mounted && (seconds - _lastSyncedSecond).abs() >= 5) {
+    if (seconds <= 0 || _savingPosition) return;
+
+    // VideoPlayer listeners can fire many times per second. Throttle persistence
+    // so playback does not cause a database/SharedPreferences write on every tick.
+    final now = DateTime.now();
+    final shouldSync = (seconds - _lastSyncedSecond).abs() >= 5;
+    final shouldSaveLocal = now.difference(_lastLocalSave) >= const Duration(seconds: 2);
+    if (!shouldSync && !shouldSaveLocal) return;
+
+    _savingPosition = true;
+    try {
+      if (shouldSaveLocal) {
+        await p.setInt(_progressKey, seconds);
+        _lastLocalSave = now;
+      }
+      if (mounted && shouldSync) {
         _lastSyncedSecond = seconds;
         await _mediaProvider.saveWatchProgress(
           widget.item,
@@ -85,6 +100,8 @@ class _WatchScreenState extends State<WatchScreen> {
           durationSeconds: c.value.duration.inSeconds,
         );
       }
+    } finally {
+      _savingPosition = false;
     }
   }
   Future<void> _seek(int seconds) async {
