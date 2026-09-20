@@ -23,11 +23,13 @@ class HomeScreen extends StatefulWidget {
 }
 class _HomeScreenState extends State<HomeScreen> {
   int index = 0;
+  bool _drawerOpen = false;
   final pages = const [_Library(), _Discover(), AiHubScreen(), NotesScreen(), StatsScreen()];
   @override Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
     final user = FirebaseBootstrap.configured ? FirebaseAuth.instance.currentUser : null;
     return Scaffold(
+      onDrawerChanged: (open) => setState(() => _drawerOpen = open),
       drawer: CustomDrawer(
         userName: user?.displayName ?? '🌝 moon 🌝',
         avatarUrl: user?.photoURL,
@@ -89,7 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: pages[index],
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: _drawerOpen ? null : NavigationBar(
         selectedIndex: index, onDestinationSelected: (v) => setState(() => index = v),
         destinations: [
           NavigationDestination(icon: const Icon(Icons.video_library_outlined), label: t.t('library')),
@@ -164,7 +166,7 @@ class _LibraryState extends State<_Library> {
           SliverToBoxAdapter(child:_HorizontalSection(title:'قائمتي',icon:Icons.bookmark,items:provider.library.where((x)=>x.watchStatus=='not_watched').toList())),
         SliverToBoxAdapter(child:_SectionHeader(title:filter=='all'?'كل مكتبتك':'نتائج الفلترة',icon:Icons.video_library)),
         SliverPadding(padding:const EdgeInsets.fromLTRB(16,0,16,20),sliver:SliverGrid(
-          gridDelegate:const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent:170,mainAxisExtent:265,crossAxisSpacing:12,mainAxisSpacing:14),
+          gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:2,mainAxisExtent:265,crossAxisSpacing:12,mainAxisSpacing:14),
           delegate:SliverChildBuilderDelegate((_,i)=>_DismissibleMediaCard(item: _filtered(provider.library)[i]),childCount:_filtered(provider.library).length),
         )),
       ] else const SliverFillRemaining(hasScrollBody: false, child: Center(child: Padding(padding: EdgeInsets.all(32), child: Text('مكتبتك فاضية حالياً\nابحث عن فيلم أو مسلسل وأضفه هون.', textAlign: TextAlign.center, style: TextStyle(fontSize: 17))))),
