@@ -9,7 +9,11 @@ import '../services/tmdb_service.dart';
 import '../services/jikan_service.dart';
 
 class AiProvider extends ChangeNotifier {
-  AiProvider() { loadChat(); }
+  AiProvider() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      loadChat();
+    });
+  }
   final AiService service = AiService();
   final DatabaseService database = DatabaseService.instance;
   final TmdbService tmdb = TmdbService();
@@ -19,7 +23,7 @@ class AiProvider extends ChangeNotifier {
   String streamingText = '';
 
   Future<void> loadChat() async {
-    try { messages.addAll(await database.getChat()); } catch (_) {}
+    try { messages.addAll(await database.getChat()); } catch (e, st) { debugPrint('AI chat load failed: $e\\n$st'); }
     notifyListeners();
   }
 
