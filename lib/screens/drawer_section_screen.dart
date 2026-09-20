@@ -37,6 +37,7 @@ class _DrawerSectionScreenState extends State<DrawerSectionScreen> {
   List<Map<String, dynamic>> episodeDates = [];
   List<Map<String, dynamic>> watchedEpisodes = [];
   Set<String> customKeys = {};
+  Set<String> favoriteCharacterNames = {};
   bool loading = true;
   String? error;
 
@@ -67,6 +68,8 @@ class _DrawerSectionScreenState extends State<DrawerSectionScreen> {
   Future<void> _load() async {
     final provider = context.read<MediaProvider>();
     try {
+      final prefs = await SharedPreferences.getInstance();
+      favoriteCharacterNames = (prefs.getStringList('cineverse_favorite_characters') ?? []).toSet();
       switch (widget.section) {
         case DrawerSection.anime:
           items = await provider.topAnime();
@@ -84,10 +87,31 @@ class _DrawerSectionScreenState extends State<DrawerSectionScreen> {
           watchedEpisodes = await provider.episodeHistory(limit: 80);
           items = provider.library.where((x) => x.lastWatchedSeconds > 0).toList();
         case DrawerSection.recommendations:
-          if (provider.library.isNotEmpty) {
-            items = await provider.recommendations(provider.library.first, context.read<SettingsProvider>().locale.languageCode);
+          final candidates = provider.library
+              .where((x) => x.isFavorite || x.watchStatus == AppConstants.statusWatching)
+              .take(4)
+              .toList();
+          if (candidates.isEmpty && provider.library.isNotEmpty) {
+            candidates.add(provider.library.first);
+          }
+          if (candidates.isEmpty) {
+            items = await provider.trending(
+              context.read<SettingsProvider>().locale.languageCode,
+            );
           } else {
-            items = await provider.trending(context.read<SettingsProvider>().locale.languageCode);
+            final merged = <String, MediaItem>{};
+            final language =
+                context.read<SettingsProvider>().locale.languageCode;
+            for (final candidate in candidates) {
+              final recs = await provider.recommendations(candidate, language);
+              for (final rec in recs) {
+                if (rec.id != candidate.id ||
+                    rec.mediaType != candidate.mediaType) {
+                  merged[rec.mediaType + ':' + rec.id.toString()] = rec;
+                }
+              }
+            }
+            items = merged.values.take(30).toList();
           }
         case DrawerSection.customList:
           final prefs = await SharedPreferences.getInstance();
@@ -217,52 +241,60 @@ class _DrawerSectionScreenState extends State<DrawerSectionScreen> {
         widget.section == DrawerSection.popularCharacters) {
       final chars = _characters().entries.toList()
         ..sort((a, b) => b.value.compareTo(a.value));
+      final visible = widget.section == DrawerSection.favoriteCharacters
+          ? chars.where((e) => favoriteCharacterNames.contains(e.key)).toList()
+          : chars;
 
-      return chars.isEmpty
-          ? const Center(child: Text('لا توجد بيانات شخصيات كافية في مكتبتك حالياً.'))
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: chars.length,
-              separatorBuilder: (_, __) => const Divider(),
-              itemBuilder: (_, i) => ListTile(
-                leading: CircleAvatar(child: Text('${i + 1}')),
-                title: Text(chars[i].key),
-                subtitle: Text(
-                  widget.section == DrawerSection.popularCharacters
-                      ? 'تكرار في مكتبتك'
-                      : 'شخصية من بيانات مكتبتك',
-                ),
-                trailing: Text('${chars[i].value}'),
-              ),
-            );
-    }
-
-    if (widget.section == DrawerSection.history) {
-      if (watchedEpisodes.isEmpty) {
-        return const Center(
+      if (visible.isEmpty) {
+        return Center(
           child: Padding(
-            padding: EdgeInsets.all(28),
-            child: Text('لا توجد حلقات شاهدتها أو تابعتها حتى الآن.', textAlign: TextAlign.center),
+            padding: const EdgeInsets.all(28),
+            child: Text(
+              widget.section == DrawerSection.favoriteCharacters
+                  ? 'لم تحفظ أي شخصية كمفضلة بعد.'
+                  : 'لا توجد بيانات شخصيات كافية في مكتبتك حالياً.',
+              textAlign: TextAlign.center,
+            ),
           ),
         );
       }
+
       return ListView.separated(
         padding: const EdgeInsets.all(12),
-        itemCount: watchedEpisodes.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemCount: visible.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 4),
         itemBuilder: (_, i) {
-          final row = watchedEpisodes[i];
-          final position = (row['position_seconds'] as int?) ?? 0;
-          final duration = (row['duration_seconds'] as int?) ?? 0;
-          final progress = duration > 0 ? (position / duration).clamp(0.0, 1.0) : 0.0;
+          final name = visible[i].key;
+          final favorite = favoriteCharacterNames.contains(name);
+
           return Card(
             child: ListTile(
-              leading: const Icon(Icons.history_rounded),
-              title: Text((row['episode_name'] ?? 'حلقة').toString()),
-              subtitle: Text('م${row['season']} • ح${row['episode']} • ${position ~/ 60} دقيقة'),
-              trailing: SizedBox(
-                width: 72,
-                child: LinearProgressIndicator(value: progress),
+              leading: CircleAvatar(child: Text((i + 1).toString())),
+              title: Text(name),
+              subtitle: Text(
+                widget.section == DrawerSection.popularCharacters
+                    ? 'ظهر في ' + visible[i].value.toString() + ' أعمال من مكتبتك'
+                    : 'شخصية مفضلة',
+              ),
+              trailing: IconButton(
+                tooltip: favorite ? 'إزالة من المفضلة' : 'إضافة للمفضلة',
+                icon: Icon(
+                  favorite ? Icons.favorite : Icons.favorite_border,
+                ),
+                onPressed: () async {
+                  final prefs = await SharedPreferences.getInstance();
+                  setState(() {
+                    if (favoriteCharacterNames.contains(name)) {
+                      favoriteCharacterNames.remove(name);
+                    } else {
+                      favoriteCharacterNames.add(name);
+                    }
+                  });
+                  await prefs.setStringList(
+                    'cineverse_favorite_characters',
+                    favoriteCharacterNames.toList(),
+                  );
+                },
               ),
             ),
           );
