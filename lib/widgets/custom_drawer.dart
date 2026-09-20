@@ -45,7 +45,8 @@ class CustomDrawer extends StatelessWidget {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Drawer(
-        width: MediaQuery.sizeOf(context).width * .84,
+        elevation: 24,
+        width: (MediaQuery.sizeOf(context).width * .84).clamp(280.0, 360.0),
         child: SafeArea(
           child: Column(
             children: [
@@ -91,11 +92,18 @@ class CustomDrawer extends StatelessWidget {
               ),
               const Divider(height: 1),
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
+                child: ScrollbarTheme(
+                  data: ScrollbarThemeData(
+                    thumbColor: WidgetStatePropertyAll(Colors.transparent),
+                    trackColor: WidgetStatePropertyAll(Colors.transparent),
                   ),
+                  child: Scrollbar(
+                    child: ListView.builder(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 8,
+                      ),
                   itemCount: _items.length,
                   itemBuilder: (context, index) {
                     final item = _items[index];
@@ -135,7 +143,9 @@ class CustomDrawer extends StatelessWidget {
                         ),
                       ],
                     );
-                  },
+                      },
+                    ),
+                  ),
                 ),
               ),
             ],
