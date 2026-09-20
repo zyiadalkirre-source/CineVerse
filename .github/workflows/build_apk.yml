@@ -220,11 +220,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -n "\${GOOGLE_SERVICES_JSON:-}" ]; then
+          if [ -n "${GOOGLE_SERVICES_JSON:-}" ]; then
             printf '%s' "$GOOGLE_SERVICES_JSON" | base64 --decode > android/app/google-services.json
             python3 -m json.tool android/app/google-services.json >/dev/null
             echo "google-services.json injected from GOOGLE_SERVICES_JSON."
-          elif [ -n "\${FIREBASE_ANDROID_CONFIG_JSON:-}" ]; then
+          elif [ -n "${FIREBASE_ANDROID_CONFIG_JSON:-}" ]; then
             printf '%s' "$FIREBASE_ANDROID_CONFIG_JSON" > android/app/google-services.json
             python3 -m json.tool android/app/google-services.json >/dev/null
             echo "google-services.json injected from legacy FIREBASE_ANDROID_CONFIG_JSON."
