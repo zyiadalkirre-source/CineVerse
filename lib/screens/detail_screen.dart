@@ -120,7 +120,16 @@ class _DetailScreenState extends State<DetailScreen> {
         ],
         const SizedBox(height:16),
         Wrap(spacing:8,children:[ElevatedButton.icon(onPressed:_note,icon:const Icon(Icons.note_add),label:const Text('ملاحظة')),ElevatedButton.icon(onPressed:loading?null:_ai,icon:const Icon(Icons.auto_awesome),label:const Text('تحليل AI')),if(item.trailerKey!=null)IconButton(onPressed:()=>launchUrl(Uri.parse('https://www.youtube.com/watch?v='+item.trailerKey!)),icon:const Icon(Icons.play_circle))]),
-        if(recommendations.isNotEmpty)...[const SizedBox(height:20),Text('اقتراحات مشابهة',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold)),SizedBox(height:180,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:recommendations.length,separatorBuilder:(_,__)=>const SizedBox(width:10),itemBuilder:(_,i)=>SizedBox(width:105,child:Column(children:[if(recommendations[i].posterUrl!=null)Image.network(recommendations[i].posterUrl!,height:140,width:100,fit:BoxFit.cover),Text(recommendations[i].title,maxLines:2,overflow:TextOverflow.ellipsis,textAlign:TextAlign.center)]))))],
+        if(recommendations.isNotEmpty)...[const SizedBox(height:20),Text('اقتراحات مشابهة',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold)),SizedBox(height:180,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:recommendations.length,separatorBuilder:(_,__)=>const SizedBox(width:10),itemBuilder:(_,i)=>SizedBox(width:105,child:InkWell(
+  onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>DetailScreen(item:recommendations[i]))),
+  borderRadius:BorderRadius.circular(10),
+  child:Column(children:[
+    if(recommendations[i].posterUrl!=null)
+      ClipRRect(borderRadius:BorderRadius.circular(10),child:Image.network(recommendations[i].posterUrl!,height:140,width:100,fit:BoxFit.cover,errorBuilder:(_,__,___)=>Container(width:100,height:140,color:Theme.of(context).colorScheme.surfaceContainerHighest,child:const Icon(Icons.broken_image_outlined)))),
+    const SizedBox(height:4),
+    Text(recommendations[i].title,maxLines:2,overflow:TextOverflow.ellipsis,textAlign:TextAlign.center),
+  ]),
+))))],
       ]))),
     ]));
   }
