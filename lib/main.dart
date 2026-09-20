@@ -11,6 +11,7 @@ import 'providers/theme_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/media_provider.dart';
 import 'providers/ai_provider.dart';
+import 'providers/auth_provider.dart';
 import 'screens/home_screen.dart';
 import 'services/cache_service.dart';
 import 'services/notification_service.dart';
@@ -53,13 +54,21 @@ class CineVerseApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final providers = <ChangeNotifierProvider<dynamic>>[
+      ChangeNotifierProvider(create: (_) => ThemeProvider()),
+      ChangeNotifierProvider(create: (_) => SettingsProvider()),
+      ChangeNotifierProvider(create: (_) => MediaProvider()),
+      ChangeNotifierProvider(create: (_) => AiProvider()),
+    ];
+
+    if (FirebaseBootstrap.configured) {
+      providers.add(
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+      );
+    }
+
     return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        ChangeNotifierProvider(create: (_) => SettingsProvider()),
-        ChangeNotifierProvider(create: (_) => MediaProvider()),
-        ChangeNotifierProvider(create: (_) => AiProvider()),
-      ],
+      providers: providers,
       child: Consumer2<ThemeProvider, SettingsProvider>(
         builder: (context, tp, sp, _) {
           return MaterialApp(
