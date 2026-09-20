@@ -483,3 +483,5 @@ jobs:
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
+
+# Firebase secret configured; this workflow runs on push and manual dispatch.
