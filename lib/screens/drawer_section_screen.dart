@@ -35,6 +35,7 @@ class DrawerSectionScreen extends StatefulWidget {
 class _DrawerSectionScreenState extends State<DrawerSectionScreen> {
   List<MediaItem> items = [];
   List<Map<String, dynamic>> episodeDates = [];
+  List<Map<String, dynamic>> watchedEpisodes = [];
   Set<String> customKeys = {};
   bool loading = true;
   String? error;
@@ -80,8 +81,8 @@ class _DrawerSectionScreenState extends State<DrawerSectionScreen> {
         case DrawerSection.favoriteAnime:
           items = provider.library.where((x) => x.mediaType == AppConstants.typeAnime && x.isFavorite).toList();
         case DrawerSection.history:
-          items = provider.library.where((x) => x.lastWatchedSeconds > 0).toList()
-            ..sort((a, b) => b.lastWatchedSeconds.compareTo(a.lastWatchedSeconds));
+          watchedEpisodes = await provider.episodeHistory(limit: 80);
+          items = provider.library.where((x) => x.lastWatchedSeconds > 0).toList();
         case DrawerSection.recommendations:
           if (provider.library.isNotEmpty) {
             items = await provider.recommendations(provider.library.first, context.read<SettingsProvider>().locale.languageCode);
@@ -234,6 +235,39 @@ class _DrawerSectionScreenState extends State<DrawerSectionScreen> {
                 trailing: Text('\${chars[i].value}'),
               ),
             );
+    }
+
+    if (widget.section == DrawerSection.history) {
+      if (watchedEpisodes.isEmpty) {
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.all(28),
+            child: Text('لا توجد حلقات شاهدتها أو تابعتها حتى الآن.', textAlign: TextAlign.center),
+          ),
+        );
+      }
+      return ListView.separated(
+        padding: const EdgeInsets.all(12),
+        itemCount: watchedEpisodes.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (_, i) {
+          final row = watchedEpisodes[i];
+          final position = (row['position_seconds'] as int?) ?? 0;
+          final duration = (row['duration_seconds'] as int?) ?? 0;
+          final progress = duration > 0 ? (position / duration).clamp(0.0, 1.0) : 0.0;
+          return Card(
+            child: ListTile(
+              leading: const Icon(Icons.history_rounded),
+              title: Text((row['episode_name'] ?? 'حلقة').toString()),
+              subtitle: Text('م${row['season']} • ح${row['episode']} • ${position ~/ 60} دقيقة'),
+              trailing: SizedBox(
+                width: 72,
+                child: LinearProgressIndicator(value: progress),
+              ),
+            ),
+          );
+        },
+      );
     }
 
     if (widget.section == DrawerSection.episodeDates) {
