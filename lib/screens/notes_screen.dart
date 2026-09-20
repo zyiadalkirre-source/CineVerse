@@ -6,40 +6,74 @@ import 'search_screen.dart';
 
 class NotesScreen extends StatelessWidget {
   const NotesScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     final items = context.watch<MediaProvider>().library
-        .where((item) => item.notes.trim().isNotEmpty).toList();
+        .where((item) => item.notes.trim().isNotEmpty)
+        .toList();
+
     if (items.isEmpty) {
+      final theme = Theme.of(context);
+      final colors = theme.colorScheme;
+
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.note_alt_outlined, size: 64,
-                  color: Theme.of(context).colorScheme.primary),
-              const SizedBox(height: 14),
-              Text('لا توجد ملاحظات بعد',
-                  style: Theme.of(context).textTheme.titleLarge,
-                  textAlign: TextAlign.center),
-              const SizedBox(height: 8),
-              const Text('أضف عملاً إلى مكتبتك، ثم افتح تفاصيله واكتب ملاحظتك.',
-                  textAlign: TextAlign.center),
-              const SizedBox(height: 18),
-              FilledButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SearchScreen()),
-                ),
-                icon: const Icon(Icons.add),
-                label: const Text('ابحث عن عمل لإضافة ملاحظة'),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: colors.primary.withOpacity(.10),
+                    ),
+                    child: Icon(
+                      Icons.note_alt_outlined,
+                      size: 38,
+                      color: colors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'لا توجد ملاحظات بعد',
+                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'أضف عملاً إلى مكتبتك، ثم افتح تفاصيله واكتب ملاحظتك.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
+                      height: 1.4,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SearchScreen()),
+                      ),
+                      icon: const Icon(Icons.add),
+                      label: const Text('إضافة ملاحظة جديدة'),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       );
     }
+
     return ListView.builder(
       itemCount: items.length,
       itemBuilder: (_, index) {
@@ -51,7 +85,9 @@ class NotesScreen extends StatelessWidget {
           title: Text(item.title),
           subtitle: Text(item.notes, maxLines: 2, overflow: TextOverflow.ellipsis),
           onTap: () => Navigator.push(
-            context, MaterialPageRoute(builder: (_) => DetailScreen(item: item))),
+            context,
+            MaterialPageRoute(builder: (_) => DetailScreen(item: item)),
+          ),
         );
       },
     );
