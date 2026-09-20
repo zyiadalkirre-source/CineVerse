@@ -1,1 +1,543 @@
-import 'dart:async';\n\nimport '../core/constants.dart';\nimport '../models/media_item.dart';\nimport '../services/database_service.dart';\nimport '../services/jikan_service.dart';\nimport '../services/tmdb_service.dart';\n\ntypedef MediaCollectionFetcher = Future<List<MediaItem>> Function();\ntypedef MediaDetailsFetcher = Future<MediaItem> Function();\n\nclass MediaRepository {\n  MediaRepository({\n    DatabaseService? database,\n    TmdbService? tmdb,\n    JikanService? jikan,\n    Duration? collectionTtl,\n    Duration? detailsTtl,\n  })  : _database = database ?? DatabaseService.instance,\n        _tmdb = tmdb ?? TmdbService(),\n        _jikan = jikan ?? JikanService(),\n        collectionTtl = collectionTtl ?? const Duration(hours: 6),\n        detailsTtl = detailsTtl ?? const Duration(hours: 24);\n\n  final DatabaseService _database;\n  final TmdbService _tmdb;\n  final JikanService _jikan;\n\n  final Duration collectionTtl;\n  final Duration detailsTtl;\n\n  final Map<String, StreamController<List<MediaItem>>> _collectionControllers = {};\n  final Map<String, StreamController<MediaItem>> _detailsControllers = {};\n  final Map<String, Future<List<MediaItem>>> _collectionRefreshes = {};\n  final Map<String, Future<MediaItem>> _detailsRefreshes = {};\n  final Map<String, Future<void>> _collectionPrimers = {};\n  final Map<String, Future<void>> _detailsPrimers = {};\n\n  Future<List<MediaItem>> getTrending({\n    String lang = 'ar',\n    bool forceRefresh = false,\n  }) {\n    return getCollection(\n      categoryKey: _trendingKey(lang),\n      forceRefresh: forceRefresh,\n      fetchRemote: () => _tmdb.getTrending(lang: lang),\n    );\n  }\n\n  Stream<List<MediaItem>> watchTrending({String lang = 'ar'}) {\n    return watchCollection(\n      categoryKey: _trendingKey(lang),\n      fetchRemote: () => _tmdb.getTrending(lang: lang),\n    );\n  }\n\n  Future<List<MediaItem>> getTopRated({\n    String type = AppConstants.typeMovie,\n    String lang = 'ar',\n    bool forceRefresh = false,\n  }) {\n    return getCollection(\n      categoryKey: _topRatedKey(type, lang),\n      forceRefresh: forceRefresh,\n      fetchRemote: () => _tmdb.getTopRated(type: type, lang: lang),\n    );\n  }\n\n  Stream<List<MediaItem>> watchTopRated({\n    String type = AppConstants.typeMovie,\n    String lang = 'ar',\n  }) {\n    return watchCollection(\n      categoryKey: _topRatedKey(type, lang),\n      fetchRemote: () => _tmdb.getTopRated(type: type, lang: lang),\n    );\n  }\n\n  Future<List<MediaItem>> getTopAnime({bool forceRefresh = false}) {\n    return getCollection(\n      categoryKey: 'top_anime',\n      forceRefresh: forceRefresh,\n      fetchRemote: _jikan.topAnime,\n    );\n  }\n\n  Stream<List<MediaItem>> watchTopAnime() {\n    return watchCollection(\n      categoryKey: 'top_anime',\n      fetchRemote: _jikan.topAnime,\n    );\n  }\n\n  Future<List<MediaItem>> getRecommendations(\n    MediaItem item, {\n    String lang = 'ar',\n    bool forceRefresh = false,\n  }) {\n    final key = 'recommendations:' + item.mediaType + ':' + item.id.toString() + ':' + lang;\n    return getCollection(\n      categoryKey: key,\n      forceRefresh: forceRefresh,\n      fetchRemote: () {\n        if (item.mediaType == AppConstants.typeAnime) {\n          return _jikan.topAnime();\n        }\n        return _tmdb.getRecommendations(item.id, item.mediaType, lang: lang);\n      },\n    );\n  }\n\n  Stream<List<MediaItem>> watchRecommendations(\n    MediaItem item, {\n    String lang = 'ar',\n  }) {\n    final key = 'recommendations:' + item.mediaType + ':' + item.id.toString() + ':' + lang;\n    return watchCollection(\n      categoryKey: key,\n      fetchRemote: () {\n        if (item.mediaType == AppConstants.typeAnime) {\n          return _jikan.topAnime();\n        }\n        return _tmdb.getRecommendations(item.id, item.mediaType, lang: lang);\n      },\n    );\n  }\n\n  Future<List<MediaItem>> search(\n    String query, {\n    String lang = 'ar',\n    bool forceRefresh = false,\n  }) {\n    final normalized = _normalizeQuery(query);\n    if (normalized.isEmpty) return Future.value(const []);\n\n    return getCollection(\n      categoryKey: 'search:' + lang + ':' + normalized,\n      forceRefresh: forceRefresh,\n      fetchRemote: () async {\n        final tmdbResults = await _tmdb.search(query, lang: lang);\n        if (tmdbResults.isNotEmpty) return tmdbResults;\n        return _jikan.searchAnime(query);\n      },\n    );\n  }\n\n  Stream<List<MediaItem>> watchSearch(\n    String query, {\n    String lang = 'ar',\n  }) {\n    final normalized = _normalizeQuery(query);\n    if (normalized.isEmpty) return Stream.value(const []);\n\n    return watchCollection(\n      categoryKey: 'search:' + lang + ':' + normalized,\n      fetchRemote: () async {\n        final tmdbResults = await _tmdb.search(query, lang: lang);\n        if (tmdbResults.isNotEmpty) return tmdbResults;\n        return _jikan.searchAnime(query);\n      },\n    );\n  }\n\n  Future<MediaItem> getDetails(\n    MediaItem item, {\n    String lang = 'ar',\n    bool forceRefresh = false,\n  }) {\n    final key = _detailsKey(item);\n    return _getDetails(\n      key: key,\n      seed: item,\n      forceRefresh: forceRefresh,\n      fetchRemote: () => _fetchDetails(item, lang),\n    );\n  }\n\n  Stream<MediaItem> watchDetails(\n    MediaItem item, {\n    String lang = 'ar',\n  }) {\n    final key = _detailsKey(item);\n    final controller = _detailsControllers.putIfAbsent(\n      key,\n      () => StreamController<MediaItem>.broadcast(),\n    );\n\n    _primeDetails(\n      key: key,\n      seed: item,\n      fetchRemote: () => _fetchDetails(item, lang),\n    );\n\n    return controller.stream;\n  }\n\n  Future<List<MediaItem>> getLatestUpdates({\n    String lang = 'ar',\n    bool forceRefresh = false,\n  }) {\n    return getCollection(\n      categoryKey: 'latest_updates:' + lang,\n      forceRefresh: forceRefresh,\n      fetchRemote: () => _tmdb.getLatestUpdates(lang: lang),\n    );\n  }\n\n  Stream<List<MediaItem>> watchLatestUpdates({String lang = 'ar'}) {\n    return watchCollection(\n      categoryKey: 'latest_updates:' + lang,\n      fetchRemote: () => _tmdb.getLatestUpdates(lang: lang),\n    );\n  }\n\n  Future<List<MediaItem>> getCollection({\n    required String categoryKey,\n    required MediaCollectionFetcher fetchRemote,\n    bool forceRefresh = false,\n  }) async {\n    final cache = await _database.getCachedCollection(categoryKey);\n    final cachedItems = cache == null\n        ? <MediaItem>[]\n        : await _database.getCachedCollectionItems(categoryKey);\n    final cachedAt = _cachedAt(cache);\n    final fresh = cachedAt != null && !_isExpired(cachedAt, collectionTtl);\n\n    if (cachedItems.isNotEmpty || cache != null) {\n      _emitCollection(categoryKey, cachedItems);\n    }\n\n    if (!forceRefresh && fresh) {\n      return List.unmodifiable(cachedItems);\n    }\n\n    if (!forceRefresh && (cachedItems.isNotEmpty || cache != null)) {\n      _refreshCollectionInBackground(categoryKey, fetchRemote);\n      return List.unmodifiable(cachedItems);\n    }\n\n    return _refreshCollection(categoryKey, fetchRemote);\n  }\n\n  Stream<List<MediaItem>> watchCollection({\n    required String categoryKey,\n    required MediaCollectionFetcher fetchRemote,\n  }) {\n    final controller = _collectionControllers.putIfAbsent(\n      categoryKey,\n      () => StreamController<List<MediaItem>>.broadcast(),\n    );\n\n    _primeCollection(\n      categoryKey: categoryKey,\n      fetchRemote: fetchRemote,\n    );\n\n    return controller.stream;\n  }\n\n  Future<MediaItem> _getDetails({\n    required String key,\n    required MediaItem seed,\n    required MediaDetailsFetcher fetchRemote,\n    bool forceRefresh = false,\n  }) async {\n    final cache = await _database.getCachedMediaRecord(seed.id, seed.mediaType);\n    final cachedItem = cache == null\n        ? null\n        : await _database.getCachedMedia(seed.id, seed.mediaType);\n    final cachedAt = _cachedAt(cache);\n    final fresh = cachedItem != null &&\n        cachedAt != null &&\n        !_isExpired(cachedAt, detailsTtl);\n\n    if (cachedItem != null) {\n      _emitDetails(key, cachedItem);\n    }\n\n    if (!forceRefresh && fresh) {\n      return cachedItem!;\n    }\n\n    if (!forceRefresh && cachedItem != null) {\n      _refreshDetailsInBackground(key, seed, fetchRemote);\n      return cachedItem;\n    }\n\n    if (cachedItem == null && seed.id > 0) {\n      _emitDetails(key, seed);\n    }\n\n    return _refreshDetails(key, fetchRemote);\n  }\n\n  Future<void> _primeCollection({\n    required String categoryKey,\n    required MediaCollectionFetcher fetchRemote,\n  }) {\n    final existing = _collectionPrimers[categoryKey];\n    if (existing != null) return existing;\n\n    final future = getCollection(\n      categoryKey: categoryKey,\n      fetchRemote: fetchRemote,\n    ).then<void>((_) {}).catchError((_) {});\n\n    _collectionPrimers[categoryKey] = future;\n    future.whenComplete(() {\n      if (identical(_collectionPrimers[categoryKey], future)) {\n        _collectionPrimers.remove(categoryKey);\n      }\n    });\n    return future;\n  }\n\n  Future<void> _primeDetails({\n    required String key,\n    required MediaItem seed,\n    required MediaDetailsFetcher fetchRemote,\n  }) {\n    final existing = _detailsPrimers[key];\n    if (existing != null) return existing;\n\n    final future = _getDetails(\n      key: key,\n      seed: seed,\n      fetchRemote: fetchRemote,\n    ).then<void>((_) {}).catchError((_) {});\n\n    _detailsPrimers[key] = future;\n    future.whenComplete(() {\n      if (identical(_detailsPrimers[key], future)) {\n        _detailsPrimers.remove(key);\n      }\n    });\n    return future;\n  }\n\n  Future<List<MediaItem>> _refreshCollection(\n    String categoryKey,\n    MediaCollectionFetcher fetchRemote,\n  ) async {\n    final active = _collectionRefreshes[categoryKey];\n    if (active != null) return active;\n\n    final future = _performCollectionRefresh(categoryKey, fetchRemote);\n    _collectionRefreshes[categoryKey] = future;\n\n    try {\n      return await future;\n    } finally {\n      if (identical(_collectionRefreshes[categoryKey], future)) {\n        _collectionRefreshes.remove(categoryKey);\n      }\n    }\n  }\n\n  Future<List<MediaItem>> _performCollectionRefresh(\n    String categoryKey,\n    MediaCollectionFetcher fetchRemote,\n  ) async {\n    final remoteItems = await fetchRemote();\n    final cleaned = _deduplicate(remoteItems);\n    await _database.cacheCollection(categoryKey, cleaned);\n    _emitCollection(categoryKey, cleaned);\n    return List.unmodifiable(cleaned);\n  }\n\n  Future<MediaItem> _refreshDetails(\n    String key,\n    MediaDetailsFetcher fetchRemote,\n  ) async {\n    final active = _detailsRefreshes[key];\n    if (active != null) return active;\n\n    final future = _performDetailsRefresh(key, fetchRemote);\n    _detailsRefreshes[key] = future;\n\n    try {\n      return await future;\n    } finally {\n      if (identical(_detailsRefreshes[key], future)) {\n        _detailsRefreshes.remove(key);\n      }\n    }\n  }\n\n  Future<MediaItem> _performDetailsRefresh(\n    String key,\n    MediaDetailsFetcher fetchRemote,\n  ) async {\n    final remoteItem = await fetchRemote();\n    await _database.cacheDetails(remoteItem);\n    _emitDetails(key, remoteItem);\n    return remoteItem;\n  }\n\n  void _refreshCollectionInBackground(\n    String categoryKey,\n    MediaCollectionFetcher fetchRemote,\n  ) {\n    unawaited(_refreshCollectionSilently(categoryKey, fetchRemote));\n  }\n\n  Future<void> _refreshCollectionSilently(\n    String categoryKey,\n    MediaCollectionFetcher fetchRemote,\n  ) async {\n    try {\n      await _refreshCollection(categoryKey, fetchRemote);\n    } catch (_) {}\n  }\n\n  void _refreshDetailsInBackground(\n    String key,\n    MediaItem seed,\n    MediaDetailsFetcher fetchRemote,\n  ) {\n    unawaited(_refreshDetailsSilently(key, seed, fetchRemote));\n  }\n\n  Future<void> _refreshDetailsSilently(\n    String key,\n    MediaItem seed,\n    MediaDetailsFetcher fetchRemote,\n  ) async {\n    try {\n      await _refreshDetails(key, fetchRemote);\n    } catch (_) {}\n  }\n\n  Future<MediaItem> _fetchDetails(MediaItem item, String lang) async {\n    if (item.mediaType == AppConstants.typeAnime) {\n      final details = await _jikan.getDetails(item.id);\n      return details ?? item;\n    }\n\n    if (item.mediaType != AppConstants.typeMovie &&\n        item.mediaType != AppConstants.typeTv) {\n      throw ArgumentError.value(\n        item.mediaType,\n        'mediaType',\n        'Unsupported media type',\n      );\n    }\n\n    return _tmdb.getDetails(item.id, item.mediaType, lang: lang);\n  }\n\n  void _emitCollection(String categoryKey, List<MediaItem> items) {\n    final controller = _collectionControllers[categoryKey];\n    if (controller == null || controller.isClosed) return;\n    controller.add(List.unmodifiable(items));\n  }\n\n  void _emitDetails(String key, MediaItem item) {\n    final controller = _detailsControllers[key];\n    if (controller == null || controller.isClosed) return;\n    controller.add(item);\n  }\n\n  int? _cachedAt(Map<String, dynamic>? row) {\n    if (row == null) return null;\n    final value = row['cached_at'];\n    return value is int ? value : int.tryParse(value?.toString() ?? '');\n  }\n\n  bool _isExpired(int cachedAt, Duration ttl) {\n    return DateTime.now().millisecondsSinceEpoch - cachedAt >= ttl.inMilliseconds;\n  }\n\n  String _trendingKey(String lang) => 'trending:' + lang;\n\n  String _topRatedKey(String type, String lang) => 'top_rated:' + type + ':' + lang;\n\n  String _detailsKey(MediaItem item) => 'details:' + item.mediaType + ':' + item.id.toString();\n\n  String _normalizeQuery(String query) =>\n      query.trim().replaceAll(RegExp(r'\\s+'), ' ').toLowerCase();\n\n  List<MediaItem> _deduplicate(List<MediaItem> items) {\n    final unique = <String, MediaItem>{};\n    for (final item in items) {\n      if (item.id <= 0) continue;\n      if (item.mediaType != AppConstants.typeMovie &&\n          item.mediaType != AppConstants.typeTv &&\n          item.mediaType != AppConstants.typeAnime) {\n        continue;\n      }\n      unique[item.mediaType + ':' + item.id.toString()] = item;\n    }\n    return unique.values.toList(growable: false);\n  }\n\n  Future<void> dispose() async {\n    final controllers = <StreamController<dynamic>>[\n      ..._collectionControllers.values,\n      ..._detailsControllers.values,\n    ];\n\n    _collectionControllers.clear();\n    _detailsControllers.clear();\n    _collectionRefreshes.clear();\n    _detailsRefreshes.clear();\n    _collectionPrimers.clear();\n    _detailsPrimers.clear();\n\n    for (final controller in controllers) {\n      if (!controller.isClosed) {\n        await controller.close();\n      }\n    }\n\n    _tmdb.dispose();\n  }\n}\n
+import 'dart:async';
+
+import '../core/constants.dart';
+import '../models/media_item.dart';
+import '../services/database_service.dart';
+import '../services/jikan_service.dart';
+import '../services/tmdb_service.dart';
+
+typedef MediaCollectionFetcher = Future<List<MediaItem>> Function();
+typedef MediaDetailsFetcher = Future<MediaItem> Function();
+
+class MediaRepository {
+  MediaRepository({
+    DatabaseService? database,
+    TmdbService? tmdb,
+    JikanService? jikan,
+    Duration? collectionTtl,
+    Duration? detailsTtl,
+  })  : _database = database ?? DatabaseService.instance,
+        _tmdb = tmdb ?? TmdbService(),
+        _jikan = jikan ?? JikanService(),
+        _ownsTmdb = tmdb == null,
+        collectionTtl = collectionTtl ?? const Duration(hours: 6),
+        detailsTtl = detailsTtl ?? const Duration(hours: 24);
+
+  final DatabaseService _database;
+  final TmdbService _tmdb;
+  final JikanService _jikan;
+  final bool _ownsTmdb;
+
+  final Duration collectionTtl;
+  final Duration detailsTtl;
+
+  final Map<String, StreamController<List<MediaItem>>> _collectionControllers = {};
+  final Map<String, StreamController<MediaItem>> _detailsControllers = {};
+  final Map<String, Future<List<MediaItem>>> _collectionRefreshes = {};
+  final Map<String, Future<MediaItem>> _detailsRefreshes = {};
+  final Map<String, Future<void>> _collectionPrimers = {};
+  final Map<String, Future<void>> _detailsPrimers = {};
+
+  Future<List<MediaItem>> getTrending({
+    String lang = 'ar',
+    bool forceRefresh = false,
+  }) {
+    return getCollection(
+      categoryKey: _trendingKey(lang),
+      forceRefresh: forceRefresh,
+      fetchRemote: () => _tmdb.getTrending(lang: lang),
+    );
+  }
+
+  Stream<List<MediaItem>> watchTrending({String lang = 'ar'}) {
+    return watchCollection(
+      categoryKey: _trendingKey(lang),
+      fetchRemote: () => _tmdb.getTrending(lang: lang),
+    );
+  }
+
+  Future<List<MediaItem>> getTopRated({
+    String type = AppConstants.typeMovie,
+    String lang = 'ar',
+    bool forceRefresh = false,
+  }) {
+    return getCollection(
+      categoryKey: _topRatedKey(type, lang),
+      forceRefresh: forceRefresh,
+      fetchRemote: () => _tmdb.getTopRated(type: type, lang: lang),
+    );
+  }
+
+  Stream<List<MediaItem>> watchTopRated({
+    String type = AppConstants.typeMovie,
+    String lang = 'ar',
+  }) {
+    return watchCollection(
+      categoryKey: _topRatedKey(type, lang),
+      fetchRemote: () => _tmdb.getTopRated(type: type, lang: lang),
+    );
+  }
+
+  Future<List<MediaItem>> getTopAnime({bool forceRefresh = false}) {
+    return getCollection(
+      categoryKey: 'top_anime',
+      forceRefresh: forceRefresh,
+      fetchRemote: _jikan.topAnime,
+    );
+  }
+
+  Stream<List<MediaItem>> watchTopAnime() {
+    return watchCollection(
+      categoryKey: 'top_anime',
+      fetchRemote: _jikan.topAnime,
+    );
+  }
+
+  Future<List<MediaItem>> getRecommendations(
+    MediaItem item, {
+    String lang = 'ar',
+    bool forceRefresh = false,
+  }) {
+    final key = 'recommendations:' + item.mediaType + ':' + item.id.toString() + ':' + lang;
+    return getCollection(
+      categoryKey: key,
+      forceRefresh: forceRefresh,
+      fetchRemote: () {
+        if (item.mediaType == AppConstants.typeAnime) {
+          return _jikan.topAnime();
+        }
+        return _tmdb.getRecommendations(item.id, item.mediaType, lang: lang);
+      },
+    );
+  }
+
+  Stream<List<MediaItem>> watchRecommendations(
+    MediaItem item, {
+    String lang = 'ar',
+  }) {
+    final key = 'recommendations:' + item.mediaType + ':' + item.id.toString() + ':' + lang;
+    return watchCollection(
+      categoryKey: key,
+      fetchRemote: () {
+        if (item.mediaType == AppConstants.typeAnime) {
+          return _jikan.topAnime();
+        }
+        return _tmdb.getRecommendations(item.id, item.mediaType, lang: lang);
+      },
+    );
+  }
+
+  Future<List<MediaItem>> search(
+    String query, {
+    String lang = 'ar',
+    bool forceRefresh = false,
+  }) {
+    final normalized = _normalizeQuery(query);
+    if (normalized.isEmpty) return Future.value(const []);
+
+    return getCollection(
+      categoryKey: 'search:' + lang + ':' + normalized,
+      forceRefresh: forceRefresh,
+      fetchRemote: () => _searchRemote(query, lang),
+    );
+  }
+
+  Stream<List<MediaItem>> watchSearch(
+    String query, {
+    String lang = 'ar',
+  }) {
+    final normalized = _normalizeQuery(query);
+    if (normalized.isEmpty) return Stream.value(const []);
+
+    return watchCollection(
+      categoryKey: 'search:' + lang + ':' + normalized,
+      fetchRemote: () async {
+        final tmdbResults = await _tmdb.search(query, lang: lang);
+        if (tmdbResults.isNotEmpty) return tmdbResults;
+        return _jikan.searchAnime(query);
+      },
+    );
+  }
+
+  Future<List<MediaItem>> _searchRemote(String query, String lang) async {
+    final unique = <String, MediaItem>{};
+
+    Future<void> addTmdb(String requestedLanguage) async {
+      try {
+        final items = await _tmdb.search(query, lang: requestedLanguage);
+        for (final item in items) {
+          unique[item.mediaType + ':' + item.id.toString()] = item;
+        }
+      } catch (_) {}
+    }
+
+    await addTmdb(lang);
+    if (lang != 'en' || unique.isEmpty) {
+      await addTmdb('en');
+    }
+
+    if (unique.isEmpty) {
+      try {
+        final anime = await _jikan.searchAnime(query);
+        for (final item in anime) {
+          unique[item.mediaType + ':' + item.id.toString()] = item;
+        }
+      } catch (_) {}
+    }
+
+    return unique.values.toList(growable: false);
+  }
+
+  Future<MediaItem> getDetails(
+    MediaItem item, {
+    String lang = 'ar',
+    bool forceRefresh = false,
+  }) {
+    final key = _detailsKey(item);
+    return _getDetails(
+      key: key,
+      seed: item,
+      forceRefresh: forceRefresh,
+      fetchRemote: () => _fetchDetails(item, lang),
+    );
+  }
+
+  Stream<MediaItem> watchDetails(
+    MediaItem item, {
+    String lang = 'ar',
+  }) {
+    final key = _detailsKey(item);
+    final controller = _detailsControllers.putIfAbsent(
+      key,
+      () => StreamController<MediaItem>.broadcast(),
+    );
+
+    _primeDetails(
+      key: key,
+      seed: item,
+      fetchRemote: () => _fetchDetails(item, lang),
+    );
+
+    return controller.stream;
+  }
+
+  Future<List<MediaItem>> getLatestUpdates({
+    String lang = 'ar',
+    bool forceRefresh = false,
+  }) {
+    return getCollection(
+      categoryKey: 'latest_updates:' + lang,
+      forceRefresh: forceRefresh,
+      fetchRemote: () => _tmdb.getLatestUpdates(lang: lang),
+    );
+  }
+
+  Stream<List<MediaItem>> watchLatestUpdates({String lang = 'ar'}) {
+    return watchCollection(
+      categoryKey: 'latest_updates:' + lang,
+      fetchRemote: () => _tmdb.getLatestUpdates(lang: lang),
+    );
+  }
+
+  Future<List<MediaItem>> getCollection({
+    required String categoryKey,
+    required MediaCollectionFetcher fetchRemote,
+    bool forceRefresh = false,
+  }) async {
+    final cache = await _database.getCachedCollection(categoryKey);
+    final cachedItems = cache == null
+        ? <MediaItem>[]
+        : await _database.getCachedCollectionItems(categoryKey);
+    final cachedAt = _cachedAt(cache);
+    final fresh = cachedAt != null && !_isExpired(cachedAt, collectionTtl);
+
+    if (cachedItems.isNotEmpty || cache != null) {
+      _emitCollection(categoryKey, cachedItems);
+    }
+
+    if (!forceRefresh && fresh) {
+      return List.unmodifiable(cachedItems);
+    }
+
+    if (!forceRefresh && (cachedItems.isNotEmpty || cache != null)) {
+      _refreshCollectionInBackground(categoryKey, fetchRemote);
+      return List.unmodifiable(cachedItems);
+    }
+
+    return _refreshCollection(categoryKey, fetchRemote);
+  }
+
+  Stream<List<MediaItem>> watchCollection({
+    required String categoryKey,
+    required MediaCollectionFetcher fetchRemote,
+  }) {
+    final controller = _collectionControllers.putIfAbsent(
+      categoryKey,
+      () => StreamController<List<MediaItem>>.broadcast(),
+    );
+
+    _primeCollection(
+      categoryKey: categoryKey,
+      fetchRemote: fetchRemote,
+    );
+
+    return controller.stream;
+  }
+
+  Future<MediaItem> _getDetails({
+    required String key,
+    required MediaItem seed,
+    required MediaDetailsFetcher fetchRemote,
+    bool forceRefresh = false,
+  }) async {
+    final cache = await _database.getCachedMediaRecord(seed.id, seed.mediaType);
+    final cachedItem = cache == null
+        ? null
+        : await _database.getCachedMedia(seed.id, seed.mediaType);
+    final cachedAt = _cachedAt(cache);
+    final fresh = cachedItem != null &&
+        cachedAt != null &&
+        !_isExpired(cachedAt, detailsTtl);
+
+    if (cachedItem != null) {
+      _emitDetails(key, cachedItem);
+    }
+
+    if (!forceRefresh && fresh) {
+      return cachedItem!;
+    }
+
+    if (!forceRefresh && cachedItem != null) {
+      _refreshDetailsInBackground(key, seed, fetchRemote);
+      return cachedItem;
+    }
+
+    if (cachedItem == null && seed.id > 0) {
+      _emitDetails(key, seed);
+    }
+
+    return _refreshDetails(key, fetchRemote);
+  }
+
+  Future<void> _primeCollection({
+    required String categoryKey,
+    required MediaCollectionFetcher fetchRemote,
+  }) {
+    final existing = _collectionPrimers[categoryKey];
+    if (existing != null) return existing;
+
+    final future = getCollection(
+      categoryKey: categoryKey,
+      fetchRemote: fetchRemote,
+    ).then<void>((_) {}).catchError((_) {});
+
+    _collectionPrimers[categoryKey] = future;
+    future.whenComplete(() {
+      if (identical(_collectionPrimers[categoryKey], future)) {
+        _collectionPrimers.remove(categoryKey);
+      }
+    });
+    return future;
+  }
+
+  Future<void> _primeDetails({
+    required String key,
+    required MediaItem seed,
+    required MediaDetailsFetcher fetchRemote,
+  }) {
+    final existing = _detailsPrimers[key];
+    if (existing != null) return existing;
+
+    final future = _getDetails(
+      key: key,
+      seed: seed,
+      fetchRemote: fetchRemote,
+    ).then<void>((_) {}).catchError((_) {});
+
+    _detailsPrimers[key] = future;
+    future.whenComplete(() {
+      if (identical(_detailsPrimers[key], future)) {
+        _detailsPrimers.remove(key);
+      }
+    });
+    return future;
+  }
+
+  Future<List<MediaItem>> _refreshCollection(
+    String categoryKey,
+    MediaCollectionFetcher fetchRemote,
+  ) async {
+    final active = _collectionRefreshes[categoryKey];
+    if (active != null) return active;
+
+    final future = _performCollectionRefresh(categoryKey, fetchRemote);
+    _collectionRefreshes[categoryKey] = future;
+
+    try {
+      return await future;
+    } finally {
+      if (identical(_collectionRefreshes[categoryKey], future)) {
+        _collectionRefreshes.remove(categoryKey);
+      }
+    }
+  }
+
+  Future<List<MediaItem>> _performCollectionRefresh(
+    String categoryKey,
+    MediaCollectionFetcher fetchRemote,
+  ) async {
+    final remoteItems = await fetchRemote();
+    final cleaned = _deduplicate(remoteItems);
+    await _database.cacheCollection(categoryKey, cleaned);
+    _emitCollection(categoryKey, cleaned);
+    return List.unmodifiable(cleaned);
+  }
+
+  Future<MediaItem> _refreshDetails(
+    String key,
+    MediaDetailsFetcher fetchRemote,
+  ) async {
+    final active = _detailsRefreshes[key];
+    if (active != null) return active;
+
+    final future = _performDetailsRefresh(key, fetchRemote);
+    _detailsRefreshes[key] = future;
+
+    try {
+      return await future;
+    } finally {
+      if (identical(_detailsRefreshes[key], future)) {
+        _detailsRefreshes.remove(key);
+      }
+    }
+  }
+
+  Future<MediaItem> _performDetailsRefresh(
+    String key,
+    MediaDetailsFetcher fetchRemote,
+  ) async {
+    final remoteItem = await fetchRemote();
+    await _database.cacheDetails(remoteItem);
+    _emitDetails(key, remoteItem);
+    return remoteItem;
+  }
+
+  void _refreshCollectionInBackground(
+    String categoryKey,
+    MediaCollectionFetcher fetchRemote,
+  ) {
+    unawaited(_refreshCollectionSilently(categoryKey, fetchRemote));
+  }
+
+  Future<void> _refreshCollectionSilently(
+    String categoryKey,
+    MediaCollectionFetcher fetchRemote,
+  ) async {
+    try {
+      await _refreshCollection(categoryKey, fetchRemote);
+    } catch (_) {}
+  }
+
+  void _refreshDetailsInBackground(
+    String key,
+    MediaItem seed,
+    MediaDetailsFetcher fetchRemote,
+  ) {
+    unawaited(_refreshDetailsSilently(key, seed, fetchRemote));
+  }
+
+  Future<void> _refreshDetailsSilently(
+    String key,
+    MediaItem seed,
+    MediaDetailsFetcher fetchRemote,
+  ) async {
+    try {
+      await _refreshDetails(key, fetchRemote);
+    } catch (_) {}
+  }
+
+  Future<MediaItem> _fetchDetails(MediaItem item, String lang) async {
+    if (item.mediaType == AppConstants.typeAnime) {
+      final details = await _jikan.getDetails(item.id);
+      return details ?? item;
+    }
+
+    if (item.mediaType != AppConstants.typeMovie &&
+        item.mediaType != AppConstants.typeTv) {
+      throw ArgumentError.value(
+        item.mediaType,
+        'mediaType',
+        'Unsupported media type',
+      );
+    }
+
+    return _tmdb.getDetails(item.id, item.mediaType, lang: lang);
+  }
+
+  void _emitCollection(String categoryKey, List<MediaItem> items) {
+    final controller = _collectionControllers[categoryKey];
+    if (controller == null || controller.isClosed) return;
+    controller.add(List.unmodifiable(items));
+  }
+
+  void _emitDetails(String key, MediaItem item) {
+    final controller = _detailsControllers[key];
+    if (controller == null || controller.isClosed) return;
+    controller.add(item);
+  }
+
+  int? _cachedAt(Map<String, dynamic>? row) {
+    if (row == null) return null;
+    final value = row['cached_at'];
+    return value is int ? value : int.tryParse(value?.toString() ?? '');
+  }
+
+  bool _isExpired(int cachedAt, Duration ttl) {
+    return DateTime.now().millisecondsSinceEpoch - cachedAt >= ttl.inMilliseconds;
+  }
+
+  String _trendingKey(String lang) => 'trending:' + lang;
+
+  String _topRatedKey(String type, String lang) => 'top_rated:' + type + ':' + lang;
+
+  String _detailsKey(MediaItem item) => 'details:' + item.mediaType + ':' + item.id.toString();
+
+  String _normalizeQuery(String query) =>
+      query.trim().replaceAll(RegExp(r'\\s+'), ' ').toLowerCase();
+
+  List<MediaItem> _deduplicate(List<MediaItem> items) {
+    final unique = <String, MediaItem>{};
+    for (final item in items) {
+      if (item.id <= 0) continue;
+      if (item.mediaType != AppConstants.typeMovie &&
+          item.mediaType != AppConstants.typeTv &&
+          item.mediaType != AppConstants.typeAnime) {
+        continue;
+      }
+      unique[item.mediaType + ':' + item.id.toString()] = item;
+    }
+    return unique.values.toList(growable: false);
+  }
+
+  Future<void> dispose() async {
+    final controllers = <StreamController<dynamic>>[
+      ..._collectionControllers.values,
+      ..._detailsControllers.values,
+    ];
+
+    _collectionControllers.clear();
+    _detailsControllers.clear();
+    _collectionRefreshes.clear();
+    _detailsRefreshes.clear();
+    _collectionPrimers.clear();
+    _detailsPrimers.clear();
+
+    for (final controller in controllers) {
+      if (!controller.isClosed) {
+        await controller.close();
+      }
+    }
+
+    if (_ownsTmdb) _tmdb.dispose();
+  }
+}
