@@ -27,15 +27,23 @@ class StatsScreen extends StatelessWidget {
       children: [
         Text('الإحصائيات', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 8, runSpacing: 8,
-          children: [
-            _statCard('تمت المشاهدة', stats.totalWatched.toString()),
-            _statCard('قيد المشاهدة', stats.totalWatching.toString()),
-            _statCard('قائمة الانتظار', stats.totalWatchlist.toString()),
-            _statCard('الساعات', stats.totalHours.toStringAsFixed(1)),
-            _statCard('متوسط تقييمي', stats.averageRating.toStringAsFixed(1)),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 700 ? 3 : 2;
+            final gap = 10.0;
+            final cardWidth = (constraints.maxWidth - gap * (columns - 1)) / columns;
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [
+                _statCard('تمت المشاهدة', stats.totalWatched.toString(), cardWidth),
+                _statCard('قيد المشاهدة', stats.totalWatching.toString(), cardWidth),
+                _statCard('قائمة الانتظار', stats.totalWatchlist.toString(), cardWidth),
+                _statCard('الساعات', stats.totalHours.toStringAsFixed(1), cardWidth),
+                _statCard('متوسط تقييمي', stats.averageRating.toStringAsFixed(1), constraints.maxWidth),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 20),
         Card(
@@ -119,9 +127,9 @@ class StatsScreen extends StatelessWidget {
     );
   }
 
-  Widget _statCard(String label, String value) {
+  Widget _statCard(String label, String value, double width) {
     return SizedBox(
-      width: 150,
+      width: width,
       child: Card(
         child: ListTile(
           title: Text(label, style: const TextStyle(fontSize: 12)),
