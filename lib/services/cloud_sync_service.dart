@@ -266,6 +266,27 @@ class CloudSyncService {
           continue;
         }
 
+        // The remote version has won LWW. Any still-pending local
+        // outbox entries that are not newer than this remote version are now
+        // obsolete and must not be allowed to resurrect stale data later.
+        if (remoteUpdatedAt != null) {
+          await txn.update(
+            AppConstants.tableSyncOutbox,
+            {'synced_at': DateTime.now().millisecondsSinceEpoch},
+            where: '''
+              entity_type = ?
+              AND entity_id = ?
+              AND synced_at IS NULL
+              AND created_at <= ?
+            ''',
+            whereArgs: [
+              AppConstants.tableLibrary,
+              key,
+              remoteUpdatedAt,
+            ],
+          );
+        }
+
         final deleted = data['_sync_deleted'] == true;
         final clean = Map<String, dynamic>.from(data)
           ..remove('_sync_updated_at')
