@@ -37,18 +37,9 @@ class TmdbService {
     }
   }
 
-  Future<Map<String, dynamic>> _get(
-    String path, {
-    Map<String, String> query = const {},
-  }) async {
+  Future<Map<String, dynamic>> _get(String path, {Map<String, String> query = const {}}) async {
     _checkApiKey();
-
-    final uri = Uri.parse('$_base$path').replace(
-      queryParameters: {
-        'api_key': _apiKey,
-        ...query,
-      },
-    );
+    final uri = Uri.parse('$_base$path').replace(queryParameters: {'api_key': _apiKey, ...query});
 
     late final http.Response response;
     try {
@@ -81,9 +72,7 @@ class TmdbService {
 
     try {
       final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-      if (decoded is! Map) {
-        throw const TmdbException('استجابة TMDB غير صالحة.', code: 'INVALID_RESPONSE');
-      }
+      if (decoded is! Map) throw const TmdbException('استجابة TMDB غير صالحة.', code: 'INVALID_RESPONSE');
       return Map<String, dynamic>.from(decoded);
     } on TmdbException {
       rethrow;
@@ -94,49 +83,38 @@ class TmdbService {
 
   Future<List<MediaItem>> search(String query, {String lang = 'ar'}) async {
     if (query.trim().isEmpty) return [];
-    final data = await _get('/search/multi', query: {
-      'query': query.trim(),
-      'language': lang,
-      'include_adult': 'false',
-    });
+    final data = await _get('/search/multi', query: {'query': query.trim(), 'language': lang, 'include_adult': 'false'});
     final results = data['results'];
     if (results is! List) return [];
-    return results
-        .whereType<Map>()
+    return results.whereType<Map>()
         .where((item) => item['media_type'] == 'movie' || item['media_type'] == 'tv')
-        .map((item) => MediaItem.fromJson(Map<String, dynamic>.from(item)))
-        .toList();
+        .map((item) => MediaItem.fromJson(Map<String, dynamic>.from(item))).toList();
   }
 
   Future<MediaItem> getDetails(int id, String type, {String lang = 'ar'}) async {
     _validateType(type);
-    final data = await _get('/$type/$id', query: {'language': lang});
+    final data = await _get('/${type}/${id}', query: {'language': lang});
     var item = MediaItem.fromJson({...data, 'media_type': type});
-
     try {
-      final credits = await _get('/$type/$id/credits', query: {'language': lang});
-      final rawCast = credits['cast'];
-      final cast = rawCast is List
-          ? rawCast.take(15).whereType<Map>().map((value) => value['name']?.toString() ?? '').where((name) => name.isNotEmpty).toList()
+      final credits = await _get('/${type}/${id}/credits', query: {'language': lang});
+      final cast = credits['cast'] is List
+          ? (credits['cast'] as List).whereType<Map>().take(15).map((value) => value['name']?.toString() ?? '').where((name) => name.isNotEmpty).toList()
           : <String>[];
-      final rawCrew = credits['crew'];
-      final directors = rawCrew is List
-          ? rawCrew.whereType<Map>().where((value) => value['job'] == 'Director').map((value) => value['name']?.toString() ?? '').where((name) => name.isNotEmpty).toList()
+      final directors = credits['crew'] is List
+          ? (credits['crew'] as List).whereType<Map>().where((value) => value['job'] == 'Director').map((value) => value['name']?.toString() ?? '').where((name) => name.isNotEmpty).toList()
           : <String>[];
       item = item.copyWith(cast: cast, director: directors.isEmpty ? null : directors.first);
     } catch (_) {}
-
     try {
       final trailer = _firstYoutubeTrailer(await getVideos(id, type, lang: lang));
       if (trailer != null) item = item.copyWith(trailerKey: trailer['key']?.toString());
     } catch (_) {}
-
     return item;
   }
 
   Future<List<Map<String, dynamic>>> getVideos(int id, String type, {String? lang}) async {
     _validateType(type);
-    final data = await _get('/$type/$id/videos', query: {if (lang != null) 'language': lang});
+    final data = await _get('/${type}/${id}/videos', query: {if (lang != null) 'language': lang});
     return _mapResults(data['results']);
   }
 
@@ -144,13 +122,13 @@ class TmdbService {
     if (tvId <= 0 || season < 0 || episode <= 0) {
       throw const TmdbException('بيانات الحلقة غير صالحة.', code: 'INVALID_EPISODE');
     }
-    final data = await _get('/tv/$tvId/season/$season/episode/$episode/videos', query: {if (lang != null) 'language': lang});
+    final data = await _get('/tv/${tvId}/season/${season}/episode/${episode}/videos', query: {if (lang != null) 'language': lang});
     return _mapResults(data['results']);
   }
 
   Future<List<WatchProvider>> getWatchProviders(int id, String type, {String region = 'SY'}) async {
     _validateType(type);
-    final data = await _get('/$type/$id/watch/providers');
+    final data = await _get('/${type}/${id}/watch/providers');
     final results = data['results'];
     if (results is! Map) return [];
     final regionData = results[region];
@@ -172,7 +150,6 @@ class TmdbService {
         ));
       }
     }
-
     add(regionData['flatrate'], 'اشتراك');
     add(regionData['free'], 'مجاني');
     add(regionData['ads'], 'إعلانات');
@@ -180,9 +157,7 @@ class TmdbService {
     add(regionData['buy'], 'شراء');
 
     final unique = <String, WatchProvider>{};
-    for (final provider in providers) {
-      unique['${provider.id}:${provider.type}'] = provider;
-    }
+    for (final provider in providers) unique['${provider.id}:${provider.type}'] = provider;
     return unique.values.toList();
   }
 
@@ -190,36 +165,32 @@ class TmdbService {
 
   Future<List<MediaItem>> getRecommendations(int id, String type, {String lang = 'ar'}) async {
     _validateType(type);
-    final data = await _get('/$type/$id/recommendations', query: {'language': lang});
-    return (data['results'] is List ? data['results'] as List : const [])
-        .whereType<Map>()
-        .take(12)
-        .map((value) => MediaItem.fromJson(Map<String, dynamic>.from(value)..['media_type'] = type))
-        .toList();
+    final data = await _get('/${type}/${id}/recommendations', query: {'language': lang});
+    final raw = data['results'];
+    return raw is List
+        ? raw.whereType<Map>().take(12).map((value) => MediaItem.fromJson({...Map<String, dynamic>.from(value), 'media_type': type})).toList()
+        : [];
   }
 
   Future<List<MediaItem>> getTrending({String lang = 'ar'}) async {
     final data = await _get('/trending/all/week', query: {'language': lang});
-    return (data['results'] is List ? data['results'] as List : const [])
-        .whereType<Map>()
-        .where((value) => value['media_type'] == 'movie' || value['media_type'] == 'tv')
-        .take(20)
-        .map((value) => MediaItem.fromJson(Map<String, dynamic>.from(value)))
-        .toList();
+    final raw = data['results'];
+    return raw is List
+        ? raw.whereType<Map>().where((value) => value['media_type'] == 'movie' || value['media_type'] == 'tv').take(20).map((value) => MediaItem.fromJson(Map<String, dynamic>.from(value))).toList()
+        : [];
   }
 
   Future<List<MediaItem>> getTopRated({String type = 'movie', String lang = 'ar'}) async {
     _validateType(type);
-    final data = await _get('/$type/top_rated', query: {'language': lang});
-    return (data['results'] is List ? data['results'] as List : const [])
-        .whereType<Map>()
-        .take(20)
-        .map((value) => MediaItem.fromJson({...Map<String, dynamic>.from(value), 'media_type': type}))
-        .toList();
+    final data = await _get('/${type}/top_rated', query: {'language': lang});
+    final raw = data['results'];
+    return raw is List
+        ? raw.whereType<Map>().take(20).map((value) => MediaItem.fromJson({...Map<String, dynamic>.from(value), 'media_type': type})).toList()
+        : [];
   }
 
   Future<List<Map<String, dynamic>>> getTvEpisodes(int id, int season, {String lang = 'ar'}) async {
-    final data = await _get('/tv/$id/season/$season', query: {'language': lang});
+    final data = await _get('/tv/${id}/season/${season}', query: {'language': lang});
     return _mapResults(data['episodes']);
   }
 
@@ -237,7 +208,8 @@ class TmdbService {
     await load('movie/now_playing', 'movie');
     await load('tv/airing_today', 'tv');
     final unique = <String, MediaItem>{for (final item in results) '${item.mediaType}:${item.id}': item};
-    return unique.values.toList()..sort((a, b) => b.voteAverage.compareTo(a.voteAverage));
+    final list = unique.values.toList()..sort((a, b) => b.voteAverage.compareTo(a.voteAverage));
+    return list.take(30).toList();
   }
 
   List<Map<String, dynamic>> _mapResults(dynamic raw) => raw is List
