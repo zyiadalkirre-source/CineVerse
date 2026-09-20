@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import '../core/constants.dart';
+import '../core/state/media_state.dart';
 import '../models/media_item.dart';
 import '../models/user_stats.dart';
 import '../services/database_service.dart';
@@ -11,27 +15,52 @@ import '../repositories/media_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MediaProvider extends ChangeNotifier {
-  final TmdbService tmdb = TmdbService();
-  final JikanService jikan = JikanService();
-  final DatabaseService database = DatabaseService.instance;
-  late final MediaRepository repository;
+  MediaProvider({
+    MediaRepository? repository,
+    DatabaseService? database,
+  })  : _repository = repository ??
+            MediaRepository(
+              database: database ?? DatabaseService.instance,
+            ),
+        _ownsRepository = repository == null,
+        database = database ?? DatabaseService.instance {
+    _initEviction();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  final MediaRepository _repository;
+  final bool _ownsRepository;
+  final DatabaseService database;
+
+  MediaRepository get repository => _repository;
   List<MediaItem> _library = [];
   bool loading = false;
   String? error;
   String? lastCorrectedQuery;
 
+  MediaState _trendingState = const MediaState();
+  MediaState _topRatedState = const MediaState();
+  MediaState _animeState = const MediaState();
+  MediaState _detailsState = const MediaState();
+  MediaState _searchState = const MediaState();
+
+  StreamSubscription<List<MediaItem>>? _trendingSub;
+  StreamSubscription<List<MediaItem>>? _topRatedSub;
+  StreamSubscription<List<MediaItem>>? _animeSub;
+  StreamSubscription<MediaItem>? _detailsSub;
+
+  MediaState get trendingState => _trendingState;
+  MediaState get topRatedState => _topRatedState;
+  MediaState get animeState => _animeState;
+  MediaState get detailsState => _detailsState;
+  MediaState get searchState => _searchState;
+
+  void _initEviction() {
+    unawaited(_repository.pruneCacheSilently());
+  }
+
   List<MediaItem> get library => List.unmodifiable(_library);
 
-  MediaProvider() {
-    repository = MediaRepository(
-      database: database,
-      tmdb: tmdb,
-      jikan: jikan,
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _load();
-    });
-  }
 
   Future<void> _load() async {
     loading = true;
@@ -44,7 +73,7 @@ class MediaProvider extends ChangeNotifier {
         if (prefs.getBool('notifyNewEpisodes') == true) {
           await NotificationCenterService.checkForNewEpisodes(
             favoriteShows: _library.where((x) => x.isFavorite && x.mediaType == AppConstants.typeTv).toList(),
-            tmdb: tmdb,
+            repository: _repository,
             updateItem: upsert,
           );
         }
@@ -178,15 +207,29 @@ class MediaProvider extends ChangeNotifier {
     error = null;
     lastCorrectedQuery = null;
     final query = q.trim();
-    if (query.isEmpty) return [];
+
+    if (query.isEmpty) {
+      _searchState = const MediaState(status: MediaStatus.success);
+      notifyListeners();
+      return const <MediaItem>[];
+    }
+
+    loading = true;
+    _searchState = _searchState.copyWith(
+      status: MediaStatus.loading,
+      isBackgroundRefreshing: false,
+      clearError: true,
+      clearErrorCode: true,
+    );
+    notifyListeners();
 
     try {
-      var results = await repository.search(query, lang: lang);
+      var results = await _repository.search(query, lang: lang);
 
       if (results.isEmpty) {
         final corrected = _correctQuery(query);
         if (corrected != null) {
-          final correctedResults = await repository.search(
+          final correctedResults = await _repository.search(
             corrected,
             lang: lang,
             forceRefresh: true,
@@ -199,35 +242,291 @@ class MediaProvider extends ChangeNotifier {
       }
 
       await database.addSearch(query);
+      _searchState = _searchState.copyWith(
+        status: MediaStatus.success,
+        items: results,
+        isOffline: false,
+        clearError: true,
+        clearErrorCode: true,
+      );
       return results;
     } catch (e, st) {
-      error = e.toString();
+      final normalized = _normalizeMediaError(e);
+      error = normalized.message;
+      _searchState = _stateFromError(_searchState, normalized);
       debugPrint('MediaProvider search failed: $e\n$st');
-      return [];
+      return const <MediaItem>[];
+    } finally {
+      loading = false;
+      notifyListeners();
     }
   }
-
   Future<List<MediaItem>> trending(String lang) async {
+    await fetchTrending(lang: lang);
+    return _trendingState.items;
+  }
+
+  Future<void> fetchTrending({
+    String lang = 'ar',
+    bool forceRefresh = false,
+  }) async {
     loading = true;
+    _trendingState = _trendingState.copyWith(
+      status: MediaStatus.loading,
+      isBackgroundRefreshing: forceRefresh,
+      clearError: true,
+      clearErrorCode: true,
+    );
     notifyListeners();
+
     try {
-      return await repository.getTrending(lang: lang);
+      final items = await _repository.getTrending(
+        lang: lang,
+        forceRefresh: forceRefresh,
+      );
+      _trendingState = _trendingState.copyWith(
+        status: MediaStatus.success,
+        items: items,
+        isOffline: false,
+        isBackgroundRefreshing: false,
+        clearError: true,
+        clearErrorCode: true,
+      );
+    } catch (e, st) {
+      final normalized = _normalizeMediaError(e);
+      final cached = await _safeTrendingCache(lang);
+      if (cached.isNotEmpty) {
+        _trendingState = _trendingState.copyWith(
+          status: MediaStatus.refreshFailed,
+          items: cached,
+          errorMessage: normalized.message,
+          errorCode: normalized.code,
+          isOffline: normalized.isOffline,
+          isBackgroundRefreshing: false,
+        );
+      } else {
+        _trendingState = _trendingState.copyWith(
+          status: MediaStatus.error,
+          errorMessage: normalized.message,
+          errorCode: normalized.code,
+          isOffline: normalized.isOffline,
+          isBackgroundRefreshing: false,
+        );
+      }
+      error = normalized.message;
+      debugPrint('MediaProvider trending failed: $e\n$st');
     } finally {
       loading = false;
       notifyListeners();
     }
   }
 
-  Future<List<MediaItem>> topRated(String lang) =>
-      repository.getTopRated(lang: lang);
+  Future<List<MediaItem>> _safeTrendingCache(String lang) async {
+    try {
+      return await _repository.getTrending(lang: lang);
+    } catch (_) {
+      return const <MediaItem>[];
+    }
+  }
 
-  Future<List<MediaItem>> topAnime() => repository.getTopAnime();
+  void watchTrending({String lang = 'ar'}) {
+    unawaited(_trendingSub?.cancel());
+    _trendingState = _trendingState.copyWith(
+      status: MediaStatus.loading,
+      isBackgroundRefreshing: true,
+      clearError: true,
+      clearErrorCode: true,
+    );
+    notifyListeners();
+    _trendingSub = _repository.watchTrending(lang: lang).listen(
+      (items) {
+        _trendingState = _trendingState.copyWith(
+          status: MediaStatus.success,
+          items: items,
+          isOffline: false,
+          isBackgroundRefreshing: false,
+          clearError: true,
+          clearErrorCode: true,
+        );
+        error = null;
+        notifyListeners();
+      },
+      onError: (Object e, StackTrace st) {
+        final normalized = _normalizeMediaError(e);
+        final hasData = _trendingState.items.isNotEmpty;
+        _trendingState = _trendingState.copyWith(
+          status: hasData ? MediaStatus.refreshFailed : MediaStatus.error,
+          errorMessage: normalized.message,
+          errorCode: normalized.code,
+          isOffline: normalized.isOffline,
+          isBackgroundRefreshing: false,
+        );
+        error = normalized.message;
+        debugPrint('MediaProvider trending stream failed: $e\n$st');
+        notifyListeners();
+      },
+    );
+  }
 
-  Future<List<MediaItem>> recommendations(MediaItem item, String lang) =>
-      repository.getRecommendations(item, lang: lang);
+  Future<List<MediaItem>> topRated(String lang) async {
+    loading = true;
+    try {
+      final items = await _repository.getTopRated(lang: lang);
+      _topRatedState = _topRatedState.copyWith(
+        status: MediaStatus.success,
+        items: items,
+        isOffline: false,
+        clearError: true,
+        clearErrorCode: true,
+      );
+      return items;
+    } catch (e) {
+      final normalized = _normalizeMediaError(e);
+      error = normalized.message;
+      _topRatedState = _stateFromError(_topRatedState, normalized);
+      return const <MediaItem>[];
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
 
-  Future<MediaItem> details(MediaItem item, String lang) =>
-      repository.getDetails(item, lang: lang);
+  Future<List<MediaItem>> topAnime() async {
+    loading = true;
+    try {
+      final items = await _repository.getTopAnime();
+      _animeState = _animeState.copyWith(
+        status: MediaStatus.success,
+        items: items,
+        isOffline: false,
+        clearError: true,
+        clearErrorCode: true,
+      );
+      return items;
+    } catch (e) {
+      final normalized = _normalizeMediaError(e);
+      error = normalized.message;
+      _animeState = _stateFromError(_animeState, normalized);
+      return const <MediaItem>[];
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<List<MediaItem>> recommendations(MediaItem item, String lang) async {
+    try {
+      return await _repository.getRecommendations(item, lang: lang);
+    } catch (e) {
+      final normalized = _normalizeMediaError(e);
+      error = normalized.message;
+      return const <MediaItem>[];
+    }
+  }
+
+  Future<MediaItem> details(MediaItem item, String lang) async {
+    _detailsState = _detailsState.copyWith(
+      status: MediaStatus.loading,
+      selectedItem: item,
+      clearError: true,
+      clearErrorCode: true,
+    );
+    notifyListeners();
+    try {
+      final result = await _repository.getDetails(item, lang: lang);
+      _detailsState = _detailsState.copyWith(
+        status: MediaStatus.success,
+        selectedItem: result,
+        isOffline: false,
+        clearError: true,
+        clearErrorCode: true,
+      );
+      return result;
+    } catch (e) {
+      final normalized = _normalizeMediaError(e);
+      error = normalized.message;
+      _detailsState = _stateFromError(_detailsState, normalized);
+      return item;
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  MediaState _stateFromError(
+    MediaState current,
+    _NormalizedMediaError normalized,
+  ) {
+    return current.copyWith(
+      status: current.hasData
+          ? MediaStatus.refreshFailed
+          : MediaStatus.error,
+      errorMessage: normalized.message,
+      errorCode: normalized.code,
+      isOffline: normalized.isOffline,
+      isBackgroundRefreshing: false,
+    );
+  }
+
+  _NormalizedMediaError _normalizeMediaError(Object error) {
+    if (error is TmdbException) {
+      switch (error.code) {
+        case 'NETWORK':
+        case 'TIMEOUT':
+          return const _NormalizedMediaError(
+            code: 'OFFLINE',
+            message: 'لا يوجد اتصال بالإنترنت حالياً، ولا توجد نسخة محفوظة لهذا المحتوى. حاول مرة أخرى.',
+            isOffline: true,
+          );
+        case 'RATE_LIMIT':
+          return const _NormalizedMediaError(
+            code: 'RATE_LIMIT',
+            message: 'تم تجاوز حد الطلبات مؤقتاً. حاول مرة أخرى بعد قليل.',
+            isOffline: false,
+          );
+        case 'UNAUTHORIZED':
+        case 'MISSING_API_KEY':
+          return const _NormalizedMediaError(
+            code: 'SERVICE_NOT_CONFIGURED',
+            message: 'خدمة المحتوى غير مهيأة حالياً. جرّب مرة أخرى لاحقاً.',
+            isOffline: false,
+          );
+        case 'NOT_FOUND':
+          return const _NormalizedMediaError(
+            code: 'NOT_FOUND',
+            message: 'لم يتم العثور على المحتوى المطلوب.',
+            isOffline: false,
+          );
+        case 'SERVER_ERROR':
+          return const _NormalizedMediaError(
+            code: 'SERVER_ERROR',
+            message: 'خدمة المحتوى تواجه مشكلة مؤقتة. حاول مرة أخرى لاحقاً.',
+            isOffline: false,
+          );
+      }
+    }
+
+    if (error is SocketException || error is TimeoutException) {
+      return const _NormalizedMediaError(
+        code: 'OFFLINE',
+        message: 'لا يوجد اتصال بالإنترنت حالياً، ولا توجد نسخة محفوظة لهذا المحتوى. حاول مرة أخرى.',
+        isOffline: true,
+      );
+    }
+
+    if (error is ArgumentError) {
+      return const _NormalizedMediaError(
+        code: 'INVALID_MEDIA_TYPE',
+        message: 'نوع المحتوى المطلوب غير مدعوم.',
+        isOffline: false,
+      );
+    }
+
+    return const _NormalizedMediaError(
+      code: 'MEDIA_LOAD_FAILED',
+      message: 'تعذر تحميل المحتوى حالياً. حاول مرة أخرى.',
+      isOffline: false,
+    );
+  }
 
   UserStats get stats {
     final watched = _library.where((x) => x.watchStatus == AppConstants.statusWatched).toList();
@@ -254,4 +553,17 @@ class MediaProvider extends ChangeNotifier {
       topGenres: top(genres), topActors: top(actors),
     );
   }
+}
+
+
+class _NormalizedMediaError {
+  const _NormalizedMediaError({
+    required this.code,
+    required this.message,
+    required this.isOffline,
+  });
+
+  final String code;
+  final String message;
+  final bool isOffline;
 }
