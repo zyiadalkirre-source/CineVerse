@@ -404,7 +404,7 @@ class DatabaseService {
     try {
       final rawIds = jsonDecode(row['media_ids_json']! as String);
       if (rawIds is! List) return [];
-      return getCachedMediaByKeys(rawIds.whereType<String>());
+      return await getCachedMediaByKeys(rawIds.whereType<String>());
     } catch (_) {
       return [];
     }
