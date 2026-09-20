@@ -71,11 +71,19 @@ jobs:
           # New Flutter templates declare AGP in settings.gradle via the plugins DSL.
           if settings_gradle.exists():
               text = settings_gradle.read_text()
-              # Flutter 3.47+ uses Kotlin DSL; patch the exact plugin declaration without regex.
-              text = text.replace('id("com.android.application") version "8.9.1"', f'id("com.android.application") version "{agp_version}"')
-              text = text.replace("id(\"com.android.application\") version \"8.7.3\"", f'id("com.android.application") version "{agp_version}"')
-              text = text.replace("id(\"org.jetbrains.kotlin.android\") version \"2.1.0\"", f'id("org.jetbrains.kotlin.android") version "{kotlin_version}"')
-              text = text.replace("id(\"org.jetbrains.kotlin.android\") version \"2.2.20\"", f'id("org.jetbrains.kotlin.android") version "{kotlin_version}"')
+              # Flutter templates change the default plugin versions over time.
+              # Match the plugin declarations themselves so the CI toolchain stays deterministic.
+              import re
+              text = re.sub(
+                  r'(id\\(["\\]com\\.android\\.application["\\]\\)\\s+version\\s+["\\])[^"\\]+(["\\])',
+                  rf'\\g<1>{agp_version}\\g<2>',
+                  text,
+              )
+              text = re.sub(
+                  r'(id\\(["\\]org\\.jetbrains\\.kotlin\\.android["\\]\\)\\s+version\\s+["\\])[^"\\]+(["\\])',
+                  rf'\\g<1>{kotlin_version}\\g<2>',
+                  text,
+              )
               settings_gradle.write_text(text)
           if wrapper_props.exists():
               text = wrapper_props.read_text()
