@@ -10,6 +10,7 @@ import 'ai_hub_screen.dart';
 import 'notes_screen.dart';
 import 'stats_screen.dart';
 import 'settings_screen.dart';
+import '../widgets/custom_drawer.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,6 +22,19 @@ class _HomeScreenState extends State<HomeScreen> {
   @override Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
     return Scaffold(
+      drawer: CustomDrawer(
+        selectedIndex: index,
+        onItemSelected: (selected) {
+          if (selected == 14) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            );
+          } else if (selected == 0) {
+            setState(() => index = 0);
+          }
+        },
+      ),
       appBar: AppBar(
         title: Text(t.t('app_name')),
         actions: [
