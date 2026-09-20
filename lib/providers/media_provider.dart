@@ -8,8 +8,6 @@ import '../core/state/media_state.dart';
 import '../models/media_item.dart';
 import '../models/user_stats.dart';
 import '../services/database_service.dart';
-import '../services/tmdb_service.dart';
-import '../services/jikan_service.dart';
 import '../services/notification_center_service.dart';
 import '../repositories/media_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -554,6 +552,20 @@ class MediaProvider extends ChangeNotifier {
     );
   }
 }
+
+  @override
+  void dispose() {
+    unawaited(_trendingSub?.cancel());
+    unawaited(_topRatedSub?.cancel());
+    unawaited(_animeSub?.cancel());
+    unawaited(_detailsSub?.cancel());
+
+    if (_ownsRepository) {
+      unawaited(_repository.dispose());
+    }
+
+    super.dispose();
+  }
 
 
 class _NormalizedMediaError {
