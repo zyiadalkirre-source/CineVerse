@@ -2,6 +2,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
 
+class AuthException implements Exception {
+  AuthException(this.message, [this.code]);
+  final String message;
+  final String? code;
+  @override String toString() => message;
+}
+
 class AuthService {
   AuthService._();
   static final instance = AuthService._();
@@ -28,7 +35,7 @@ class AuthService {
       final googleUser = await _google.authenticate(
         scopeHint: const ['email', 'profile'],
       );
-      final idToken = (await googleUser.authentication).idToken;
+      final idToken = googleUser.authentication.idToken;
       if (idToken == null || idToken.isEmpty) {
         throw StateError('لم يتم استلام رمز Google. تحقق من إعداد OAuth وgoogle-services.json.');
       }
