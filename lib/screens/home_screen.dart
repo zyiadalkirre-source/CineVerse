@@ -42,8 +42,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-class _Library extends StatelessWidget {
+class _Library extends StatefulWidget {
   const _Library();
+  @override State<_Library> createState()=>_LibraryState();
+}
+class _LibraryState extends State<_Library> {
+  String filter='all';
+  List<MediaItem> _filtered(List<MediaItem> items){
+    final r=items.where((x)=>filter=='movie'?x.mediaType=='movie':filter=='tv'?x.mediaType=='tv':filter=='favorite'?x.isFavorite:true).toList();
+    r.sort((a,b){if(a.lastWatchedSeconds>0&&b.lastWatchedSeconds==0)return -1;if(a.lastWatchedSeconds==0&&b.lastWatchedSeconds>0)return 1;return a.title.toLowerCase().compareTo(b.title.toLowerCase());});return r;
+  }
+  Widget _chip(String label,String value)=>Padding(padding:const EdgeInsets.only(right:7),child:ChoiceChip(label:Text(label),selected:filter==value,onSelected:(_)=>setState(()=>filter=value)));
   @override Widget build(BuildContext context) {
     final provider = context.watch<MediaProvider>();
     final theme = Theme.of(context);
@@ -68,17 +77,31 @@ class _Library extends StatelessWidget {
         ]),
       )),
       if (provider.library.isNotEmpty) ...[
-        const SliverToBoxAdapter(child: _SectionHeader(title: 'مكتبتك', icon: Icons.video_library)),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 170, mainAxisExtent: 265, crossAxisSpacing: 12, mainAxisSpacing: 14),
-            delegate: SliverChildBuilderDelegate((_, i) => _MediaCard(provider.library[i]), childCount: provider.library.length),
-          ),
-        ),
+        SliverToBoxAdapter(child: Padding(padding:const EdgeInsets.symmetric(horizontal:14,vertical:4),child:SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[_chip('الكل','all'),_chip('أفلام','movie'),_chip('مسلسلات','tv'),_chip('المفضلة','favorite')])))),
+        if(filter=='all'&&provider.library.any((x)=>x.lastWatchedSeconds>0))
+          SliverToBoxAdapter(child:_HorizontalSection(title:'تابع المشاهدة',icon:Icons.play_circle_fill,items:provider.library.where((x)=>x.lastWatchedSeconds>0).toList())),
+        if(filter=='all'&&provider.library.any((x)=>x.isFavorite))
+          SliverToBoxAdapter(child:_HorizontalSection(title:'المفضلة ❤️',icon:Icons.favorite,items:provider.library.where((x)=>x.isFavorite).toList())),
+        if(filter=='all'&&provider.library.any((x)=>x.watchStatus=='not_watched'))
+          SliverToBoxAdapter(child:_HorizontalSection(title:'قائمتي',icon:Icons.bookmark,items:provider.library.where((x)=>x.watchStatus=='not_watched').toList())),
+        SliverToBoxAdapter(child:_SectionHeader(title:filter=='all'?'كل مكتبتك':'نتائج الفلترة',icon:Icons.video_library)),
+        SliverPadding(padding:const EdgeInsets.fromLTRB(16,0,16,20),sliver:SliverGrid(
+          gridDelegate:const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent:170,mainAxisExtent:265,crossAxisSpacing:12,mainAxisSpacing:14),
+          delegate:SliverChildBuilderDelegate((_,i)=>_MediaCard(_filtered(provider.library)[i]),childCount:_filtered(provider.library).length),
+        )),
       ] else const SliverFillRemaining(hasScrollBody: false, child: Center(child: Padding(padding: EdgeInsets.all(32), child: Text('مكتبتك فاضية حالياً\nابحث عن فيلم أو مسلسل وأضفه هون.', textAlign: TextAlign.center, style: TextStyle(fontSize: 17))))),
     ]);
   }
+}
+
+class _HorizontalSection extends StatelessWidget {
+  final String title; final IconData icon; final List<MediaItem> items;
+  const _HorizontalSection({required this.title,required this.icon,required this.items});
+  @override Widget build(BuildContext context)=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    _SectionHeader(title:title,icon:icon),
+    SizedBox(height:220,child:ListView.separated(padding:const EdgeInsets.symmetric(horizontal:16),scrollDirection:Axis.horizontal,itemCount:items.length,separatorBuilder:(_,__)=>const SizedBox(width:12),itemBuilder:(_,i)=>SizedBox(width:125,child:_MediaCard(items[i])))),
+    const SizedBox(height:8),
+  ]);
 }
 class _SectionHeader extends StatelessWidget {
   final String title; final IconData icon;
@@ -109,7 +132,11 @@ class _MediaCard extends StatelessWidget {
   @override Widget build(BuildContext context) => InkWell(
     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DetailScreen(item: item))),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: SizedBox(width: double.infinity, child: item.posterUrl == null ? Container(color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Icon(Icons.movie)) : Image.network(item.posterUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image)))))),
+      Expanded(child: Stack(children:[
+        ClipRRect(borderRadius:BorderRadius.circular(12),child:SizedBox(width:double.infinity,height:double.infinity,child:item.posterUrl==null?Container(color:Theme.of(context).colorScheme.surfaceContainerHighest,child:const Icon(Icons.movie)):Image.network(item.posterUrl!,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Center(child:Icon(Icons.broken_image))))),
+        if(item.isFavorite)const Positioned(top:7,right:7,child:CircleAvatar(radius:15,backgroundColor:Colors.black54,child:Icon(Icons.favorite,size:16,color:Colors.white))),
+        if(item.lastWatchedSeconds>0)const Positioned(left:7,bottom:7,child:Chip(label:Text('متابعة',style:TextStyle(fontSize:10)))),
+      ])),
       const SizedBox(height: 5),
       Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
       Text(item.year, style: Theme.of(context).textTheme.bodySmall),
