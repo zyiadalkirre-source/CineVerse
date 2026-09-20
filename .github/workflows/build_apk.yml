@@ -193,6 +193,25 @@ jobs:
           print("Android Gradle project prepared with Kotlin", kotlin_version, "and AGP", agp_version)
           PY
 
+          python3 - <<'PY'
+          from pathlib import Path
+          props = Path("android/gradle.properties")
+          existing = props.read_text() if props.exists() else ""
+          lines = [line for line in existing.splitlines()
+                   if not line.startswith("android.useAndroidX=")
+                   and not line.startswith("android.enableJetifier=")]
+          lines.extend(["android.useAndroidX=true", "android.enableJetifier=false"])
+          props.write_text("\n".join(lines) + "\n")
+          print("AndroidX enabled; Jetifier disabled")
+          PY
+
+          echo "===== Android Gradle configuration ====="
+          for f in android/settings.gradle android/settings.gradle.kts; do [ -f "$f" ] && sed -n "1,240p" "$f"; done
+          for f in android/build.gradle android/build.gradle.kts; do [ -f "$f" ] && sed -n "1,240p" "$f"; done
+          for f in android/app/build.gradle android/app/build.gradle.kts; do [ -f "$f" ] && sed -n "1,300p" "$f"; done
+          echo "===== Gradle wrapper ====="
+          grep -n "distributionUrl" android/gradle/wrapper/gradle-wrapper.properties
+
       - name: Inject google-services.json
         shell: bash
         env:
@@ -249,27 +268,6 @@ jobs:
           fi
 
           echo "Google Services Gradle plugin enabled."
-
-      - name: Install Android SDK 36
-          python3 - <<'PY'
-          from pathlib import Path
-          props = Path("android/gradle.properties")
-          existing = props.read_text() if props.exists() else ""
-          lines = [line for line in existing.splitlines()
-                   if not line.startswith("android.useAndroidX=")
-                   and not line.startswith("android.enableJetifier=")]
-          lines.extend(["android.useAndroidX=true", "android.enableJetifier=false"])
-          props.write_text("\n".join(lines) + "\n")
-          print("AndroidX enabled; Jetifier disabled")
-          PY
-
-          echo "===== Android Gradle configuration ====="
-          for f in android/settings.gradle android/settings.gradle.kts; do [ -f "$f" ] && sed -n "1,240p" "$f"; done
-          for f in android/build.gradle android/build.gradle.kts; do [ -f "$f" ] && sed -n "1,240p" "$f"; done
-          for f in android/app/build.gradle android/app/build.gradle.kts; do [ -f "$f" ] && sed -n "1,300p" "$f"; done
-          echo "===== Gradle wrapper ====="
-          grep -n "distributionUrl" android/gradle/wrapper/gradle-wrapper.properties
-
       - name: Install Android SDK 36
         shell: bash
         run: |
