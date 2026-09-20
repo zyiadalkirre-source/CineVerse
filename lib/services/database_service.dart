@@ -17,6 +17,14 @@ class DatabaseService {
         await db.execute('CREATE TABLE ${AppConstants.tableLibrary} (key TEXT PRIMARY KEY, data TEXT NOT NULL)');
         await db.execute('CREATE TABLE ${AppConstants.tableChat} (id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL)');
         await db.execute('CREATE TABLE ${AppConstants.tableSearchHistory} (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, created_at INTEGER NOT NULL)');
+        await db.execute('CREATE TABLE ${AppConstants.tableEpisodeProgress} (key TEXT PRIMARY KEY, media_id INTEGER NOT NULL, media_type TEXT NOT NULL, season INTEGER NOT NULL, episode INTEGER NOT NULL, position_seconds INTEGER NOT NULL, duration_seconds INTEGER NOT NULL DEFAULT 0, episode_name TEXT NOT NULL DEFAULT "", updated_at INTEGER NOT NULL)');
+        await db.execute('CREATE TABLE ${AppConstants.tableNotifications} (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL, read INTEGER NOT NULL DEFAULT 0)');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('CREATE TABLE IF NOT EXISTS ${AppConstants.tableEpisodeProgress} (key TEXT PRIMARY KEY, media_id INTEGER NOT NULL, media_type TEXT NOT NULL, season INTEGER NOT NULL, episode INTEGER NOT NULL, position_seconds INTEGER NOT NULL, duration_seconds INTEGER NOT NULL DEFAULT 0, episode_name TEXT NOT NULL DEFAULT "", updated_at INTEGER NOT NULL)');
+          await db.execute('CREATE TABLE IF NOT EXISTS ${AppConstants.tableNotifications} (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL, read INTEGER NOT NULL DEFAULT 0)');
+        }
       });
     return _db!;
   }
@@ -46,3 +54,87 @@ class DatabaseService {
     return rows.map((r)=>r['query']! as String).toList();
   }
 }
+
+  String episodeProgressKey({required int mediaId, required String mediaType, required int season, required int episode}) =>
+      '$mediaType:$mediaId:$season:$episode';
+
+  Future<void> saveEpisodeProgress({
+    required int mediaId,
+    required String mediaType,
+    required int season,
+    required int episode,
+    required int positionSeconds,
+    required int durationSeconds,
+    String episodeName = '',
+  }) async {
+    await (await database).insert(
+      AppConstants.tableEpisodeProgress,
+      {
+        'key': episodeProgressKey(mediaId: mediaId, mediaType: mediaType, season: season, episode: episode),
+        'media_id': mediaId,
+        'media_type': mediaType,
+        'season': season,
+        'episode': episode,
+        'position_seconds': positionSeconds,
+        'duration_seconds': durationSeconds,
+        'episode_name': episodeName,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<Map<String, dynamic>?> getEpisodeProgress({
+    required int mediaId,
+    required String mediaType,
+    required int season,
+    required int episode,
+  }) async {
+    final rows = await (await database).query(
+      AppConstants.tableEpisodeProgress,
+      where: 'key = ?',
+      whereArgs: [episodeProgressKey(mediaId: mediaId, mediaType: mediaType, season: season, episode: episode)],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : Map<String, dynamic>.from(rows.first);
+  }
+
+  Future<List<Map<String, dynamic>>> getEpisodeHistory({int limit = 50}) async {
+    final rows = await (await database).query(
+      AppConstants.tableEpisodeProgress,
+      orderBy: 'updated_at DESC',
+      limit: limit,
+    );
+    return rows.map((row) => Map<String, dynamic>.from(row)).toList();
+  }
+
+  Future<void> addNotification({required String title, required String body}) async {
+    await (await database).insert(AppConstants.tableNotifications, {
+      'title': title,
+      'body': body,
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+      'read': 0,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getNotifications({int limit = 100}) async {
+    final rows = await (await database).query(
+      AppConstants.tableNotifications,
+      orderBy: 'created_at DESC',
+      limit: limit,
+    );
+    return rows.map((row) => Map<String, dynamic>.from(row)).toList();
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    await (await database).update(AppConstants.tableNotifications, {'read': 1});
+  }
+
+  Future<void> clearNotifications() async {
+    await (await database).delete(AppConstants.tableNotifications);
+  }
+
+  Future<void> close() async {
+    await _db?.close();
+    _db = null;
+  }
