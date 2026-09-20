@@ -151,11 +151,7 @@ class MediaRepository {
 
     return watchCollection(
       categoryKey: 'search:' + lang + ':' + normalized,
-      fetchRemote: () async {
-        final tmdbResults = await _tmdb.search(query, lang: lang);
-        if (tmdbResults.isNotEmpty) return tmdbResults;
-        return _jikan.searchAnime(query);
-      },
+      fetchRemote: () => _searchRemote(query, lang),
     );
   }
 
