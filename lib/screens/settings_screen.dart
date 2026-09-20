@@ -235,7 +235,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (value) => _setBool('notifyNewEpisodes', value),
               title: const Text('تنبيه بجميع الحلقات الجديدة'),
               subtitle: const Text(
-                'عند تفعيل هذا الخيار سوف يأتي التنبيه مرتين للانميات التي قمت باضافتها للمفضلة',
+                'إرسال تنبيه عند اكتشاف حلقات جديدة لمسلسلاتك المفضلة',
               ),
             ),
 
@@ -245,23 +245,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text('حفظ فلتر الحلقات'),
             ),
 
-            SwitchListTile(
-              value: autoDownload,
-              onChanged: (value) => _setBool('autoDownload', value),
-              title: const Text('التحميل التلقائي عن طريق ADM'),
-            ),
-
             _sectionTitle(context, 'المشغل'),
 
             ListTile(
               leading: const Icon(Icons.play_circle_outline_rounded),
               title: const Text('المشغل الافتراضي'),
-              subtitle: const Text('المشغل السريع'),
+              subtitle: const Text('المشغل المدمج داخل CineVerse'),
               trailing: const Icon(Icons.chevron_left_rounded),
               onTap: () => _showInfoDialog(
                 title: 'المشغل الافتراضي',
                 message:
-                    'المشغل الحالي: المشغل السريع. يمكن ربط مشغلات إضافية لاحقاً.',
+                    'المشغل الحالي: المشغل المدمج داخل CineVerse.',
               ),
             ),
 
@@ -317,30 +311,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
 
             _sectionTitle(context, 'اخرى'),
-
-            ListTile(
-              leading: const Icon(Icons.block_rounded),
-              title: const Text('الكلمات المحجوبة'),
-              subtitle: const Text(
-                'لن يتم عرض التعليقات التي تحتوي على الكلمات المحجوبة',
-              ),
-              trailing: const Icon(Icons.chevron_left_rounded),
-              onTap: () => _showInfoDialog(
-                title: 'الكلمات المحجوبة',
-                message:
-                    'يمكن إضافة نظام كلمات محجوبة للتعليقات عند تفعيل التعليقات داخل التطبيق.',
-              ),
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.emoji_events_outlined),
-              title: const Text('أبرز المساهمين'),
-              trailing: const Icon(Icons.chevron_left_rounded),
-              onTap: () => _showInfoDialog(
-                title: 'أبرز المساهمين',
-                message: 'سيظهر هنا ترتيب أبرز المساهمين في CineVerse.',
-              ),
-            ),
 
             ListTile(
               leading: const Icon(Icons.share_outlined),
