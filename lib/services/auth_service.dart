@@ -17,16 +17,59 @@ class AuthService {
   }
 
   Future<UserCredential?> signInWithGoogle() async {
-    if (kIsWeb) {
-      final provider = GoogleAuthProvider();
-      provider.addScope('email');
-      provider.addScope('profile');
-      return _auth.signInWithPopup(provider);
+    try {
+      if (kIsWeb) {
+        final provider = GoogleAuthProvider();
+        provider.addScope('email');
+        provider.addScope('profile');
+        return await _auth.signInWithPopup(provider);
+      }
+
+      final googleUser = await _google.authenticate(
+        scopeHint: const ['email', 'profile'],
+      );
+      final idToken = (await googleUser.authentication).idToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw StateError('لم يتم استلام رمز Google. تحقق من إعداد OAuth وgoogle-services.json.');
+      }
+
+      final credential = GoogleAuthProvider.credential(idToken: idToken);
+      return await _auth.signInWithCredential(credential);
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(_firebaseMessage(e.code), e.code);
+    } on GoogleSignInException catch (e) {
+      throw AuthException(_googleMessage(e.code), e.code.toString());
     }
-    final googleUser = await _google.authenticate();
-    final idToken = (await googleUser.authentication).idToken;
-    if (idToken == null) throw StateError('Google لم يعطِ رمز تسجيل الدخول.');
-    return _auth.signInWithCredential(GoogleAuthProvider.credential(idToken: idToken));
+  }
+
+  String _firebaseMessage(String code) {
+    switch (code) {
+      case 'account-exists-with-different-credential':
+        return 'هذا البريد مرتبط بطريقة تسجيل دخول مختلفة في Firebase.';
+      case 'invalid-credential':
+        return 'بيانات تسجيل الدخول من Google غير صالحة أو انتهت صلاحيتها.';
+      case 'network-request-failed':
+        return 'تعذر الاتصال بالإنترنت. تحقق من الاتصال وحاول مرة أخرى.';
+      case 'operation-not-allowed':
+        return 'تسجيل الدخول باستخدام Google غير مفعّل في Firebase Authentication.';
+      default:
+        return 'تعذر تسجيل الدخول باستخدام Google. رمز الخطأ: $code';
+    }
+  }
+
+  String _googleMessage(GoogleSignInExceptionCode code) {
+    switch (code) {
+      case GoogleSignInExceptionCode.canceled:
+        return 'تم إلغاء تسجيل الدخول.';
+      case GoogleSignInExceptionCode.clientConfigurationError:
+        return 'إعداد Google Sign-In غير مكتمل. تحقق من google-services.json وOAuth.';
+      case GoogleSignInExceptionCode.providerConfigurationError:
+        return 'إعداد مزود Google غير صحيح في المشروع.';
+      case GoogleSignInExceptionCode.networkError:
+        return 'تعذر الاتصال بخدمات Google. تحقق من الإنترنت.';
+      default:
+        return 'تعذر تسجيل الدخول باستخدام Google. رمز الخطأ: $code';
+    }
   }
 
   Future<void> signOut() async {
