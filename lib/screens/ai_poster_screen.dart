@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 
 import '../core/errors/ai_error_normalizer.dart';
 import '../providers/ai_provider.dart';
-import '../services/ai_service.dart';
 
 class AiPosterScreen extends StatefulWidget {
   const AiPosterScreen({super.key});
