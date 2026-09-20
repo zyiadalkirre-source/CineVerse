@@ -57,7 +57,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          title: Text('الإشعارات\${unread > 0 ? ' (\$unread)' : ''}'),
+          title: Text('الإشعارات${unread > 0 ? ' ($unread)' : ''}'),
           actions: [
             IconButton(
               tooltip: 'صلاحية الإشعارات',
@@ -117,7 +117,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               ),
                             ),
                             subtitle: Text(
-                              '\${(row['body'] ?? '').toString()}\n\${DateFormat('yyyy/MM/dd HH:mm').format(date)}',
+                              '${(row['body'] ?? '').toString()}\n${DateFormat('yyyy/MM/dd HH:mm').format(date)}',
                             ),
                             isThreeLine: true,
                             onTap: isUnread
