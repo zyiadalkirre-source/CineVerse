@@ -111,8 +111,15 @@ jobs:
                   text = text.replace("jvmTarget = JavaVersion.VERSION_11.toString()", "jvmTarget = JavaVersion.VERSION_17.toString()")
                   if "isCoreLibraryDesugaringEnabled = true" not in text:
                       text = text.replace("compileOptions {", "compileOptions {\n        isCoreLibraryDesugaringEnabled = true", 1)
-                  if "coreLibraryDesugaring(" not in text:
-                      text = text.replace("dependencies {", "dependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")", 1)
+                  if "com.android.tools:desugar_jdk_libs:" not in text:
+                      if "dependencies {" in text:
+                          text = text.replace(
+                              "dependencies {",
+                              "dependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")",
+                              1,
+                          )
+                      else:
+                          raise SystemExit("android/app/build.gradle.kts has no dependencies block for desugaring")
               else:
                   text = text.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
                   text = text.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 24")
