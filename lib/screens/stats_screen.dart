@@ -51,17 +51,47 @@ class StatsScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                const Text('توزيع المكتبة'),
-                const SizedBox(height: 220),
-                SizedBox(
-                  height: 220,
-                  child: PieChart(
-                    PieChartData(
-                      sections: sections,
-                      centerSpaceRadius: 45,
+                const Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text('توزيع المكتبة'),
+                ),
+                const SizedBox(height: 12),
+                if (stats.totalWatched == 0)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Column(
+                      children: [
+                        Icon(Icons.pie_chart_outline_rounded, size: 48),
+                        SizedBox(height: 10),
+                        Text('لا توجد بيانات كافية لعرض المخطط.'),
+                        SizedBox(height: 4),
+                        Text('ابدأ بإضافة أعمال إلى مكتبتك لتظهر الإحصائيات.',
+                            textAlign: TextAlign.center),
+                      ],
+                    ),
+                  )
+                else ...[
+                  SizedBox(
+                    height: 220,
+                    child: PieChart(
+                      PieChartData(
+                        sections: sections,
+                        centerSpaceRadius: 45,
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      if (stats.movies > 0) const Text('■ أفلام'),
+                      if (stats.tvShows > 0) const Text('■ مسلسلات'),
+                      if (stats.anime > 0) const Text('■ أنمي'),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -117,12 +147,21 @@ class StatsScreen extends StatelessWidget {
         const SizedBox(height: 12),
         Text('الممثلون الأكثر ظهوراً',
             style: Theme.of(context).textTheme.titleLarge),
-        ...stats.topActors.entries.map(
-          (entry) => ListTile(
-            title: Text(entry.key),
-            trailing: Text(entry.value.toString()),
+        if (stats.topActors.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 18),
+            child: Text(
+              'أضف أعمالاً إلى مكتبتك لعرض أكثر الممثلين ظهوراً.',
+              textAlign: TextAlign.center,
+            ),
+          )
+        else
+          ...stats.topActors.entries.map(
+            (entry) => ListTile(
+              title: Text(entry.key),
+              trailing: Text(entry.value.toString()),
+            ),
           ),
-        ),
       ],
     );
   }
