@@ -21,15 +21,15 @@ class WatchScreen extends StatefulWidget {
 class _WatchScreenState extends State<WatchScreen> {
   VideoPlayerController? _controller;
   SharedPreferences? _prefs;
+  late final MediaProvider _mediaProvider;
   bool _initializing = false;
   bool _fullscreen = false;
   String? _error;
   int _lastSyncedSecond = -1;
   String get _progressKey => 'watch_progress_${widget.title}_${widget.season}_${widget.episode}';
 
-  @override void initState() { super.initState(); _prepare(); }
+  @override void initState() { super.initState(); _mediaProvider = context.read<MediaProvider>(); _prepare(); }
   Future<void> _prepare() async {
-    final mediaProvider = context.read<MediaProvider>();
     _prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     final episodeSaved = await mediaProvider.getEpisodeProgress(
@@ -76,7 +76,7 @@ class _WatchScreenState extends State<WatchScreen> {
       await p.setInt(_progressKey, seconds);
       if (mounted && (seconds - _lastSyncedSecond).abs() >= 5) {
         _lastSyncedSecond = seconds;
-        await mediaProvider.saveWatchProgress(
+        await _mediaProvider.saveWatchProgress(
           widget.item,
           seconds: seconds,
           season: widget.season,
