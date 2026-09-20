@@ -17,19 +17,23 @@ import 'latest_updates_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/custom_drawer.dart';
 
+int libraryGridColumnCount(double width) {
+  if (width < 520) return 2;
+  if (width < 900) return 3;
+  return 4;
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override State<HomeScreen> createState() => _HomeScreenState();
 }
 class _HomeScreenState extends State<HomeScreen> {
   int index = 0;
-  bool _drawerOpen = false;
   final pages = const [_Library(), _Discover(), AiHubScreen(), NotesScreen(), StatsScreen()];
   @override Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
     final user = FirebaseBootstrap.configured ? FirebaseAuth.instance.currentUser : null;
     return Scaffold(
-      onDrawerChanged: (open) => setState(() => _drawerOpen = open),
       drawer: CustomDrawer(
         userName: user?.displayName ?? '🌝 moon 🌝',
         avatarUrl: user?.photoURL,
@@ -91,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: pages[index],
-      bottomNavigationBar: _drawerOpen ? null : NavigationBar(
+      bottomNavigationBar: NavigationBar(
         selectedIndex: index, onDestinationSelected: (v) => setState(() => index = v),
         destinations: [
           NavigationDestination(icon: const Icon(Icons.video_library_outlined), label: t.t('library')),
@@ -119,6 +123,7 @@ class _LibraryState extends State<_Library> {
   @override Widget build(BuildContext context) {
     final provider = context.watch<MediaProvider>();
     final theme = Theme.of(context);
+    final filteredItems = _filtered(provider.library);
     return CustomScrollView(slivers: [
       if (_showWelcomeBanner)
         SliverToBoxAdapter(child: Container(
@@ -165,10 +170,21 @@ class _LibraryState extends State<_Library> {
         if(filter=='all'&&provider.library.any((x)=>x.watchStatus=='not_watched'))
           SliverToBoxAdapter(child:_HorizontalSection(title:'قائمتي',icon:Icons.bookmark,items:provider.library.where((x)=>x.watchStatus=='not_watched').toList())),
         SliverToBoxAdapter(child:_SectionHeader(title:filter=='all'?'كل مكتبتك':'نتائج الفلترة',icon:Icons.video_library)),
-        SliverPadding(padding:const EdgeInsets.fromLTRB(16,0,16,20),sliver:SliverGrid(
-          gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:2,mainAxisExtent:265,crossAxisSpacing:12,mainAxisSpacing:14),
-          delegate:SliverChildBuilderDelegate((_,i)=>_DismissibleMediaCard(item: _filtered(provider.library)[i]),childCount:_filtered(provider.library).length),
-        )),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          sliver: SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: libraryGridColumnCount(MediaQuery.sizeOf(context).width),
+              childAspectRatio: 0.66,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 14,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (_, i) => _DismissibleMediaCard(item: filteredItems[i]),
+              childCount: filteredItems.length,
+            ),
+          ),
+        ),
       ] else const SliverFillRemaining(hasScrollBody: false, child: Center(child: Padding(padding: EdgeInsets.all(32), child: Text('مكتبتك فاضية حالياً\nابحث عن فيلم أو مسلسل وأضفه هون.', textAlign: TextAlign.center, style: TextStyle(fontSize: 17))))),
     ]);
   }
@@ -265,7 +281,17 @@ class _MediaCard extends StatelessWidget {
         if(item.lastWatchedSeconds>0)const Positioned(left:7,bottom:7,child:Chip(label:Text('متابعة',style:TextStyle(fontSize:10)))),
       ])),
       const SizedBox(height: 5),
-      Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+      Text(
+        item.title,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        softWrap: true,
+        textAlign: TextAlign.start,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+          height: 1.2,
+        ),
+      ),
       Text(item.year, style: Theme.of(context).textTheme.bodySmall),
     ]),
   );
