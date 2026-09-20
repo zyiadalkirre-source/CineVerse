@@ -141,4 +141,40 @@ class TmdbService {
     return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
   }
 
+  Future<List<MediaItem>> getLatestUpdates({String lang = 'ar'}) async {
+    _checkApiKey();
+    final results = <MediaItem>[];
+
+    Future<void> load(String path, String type) async {
+      try {
+        final url = Uri.parse(_base + '/' + path).replace(queryParameters: {
+          'api_key': _apiKey,
+          'language': lang,
+          'page': '1',
+        });
+        final res = await http.get(url);
+        if (res.statusCode != 200) return;
+        final data = json.decode(utf8.decode(res.bodyBytes));
+        final raw = data['results'];
+        if (raw is List) {
+          results.addAll(raw.whereType<Map>().map((i) => MediaItem.fromJson({
+            ...Map<String, dynamic>.from(i),
+            'media_type': type,
+          })));
+        }
+      } catch (_) {}
+    }
+
+    await load('movie/now_playing', 'movie');
+    await load('tv/airing_today', 'tv');
+
+    final unique = <String, MediaItem>{};
+    for (final item in results) {
+      unique[item.mediaType + ':' + item.id.toString()] = item;
+    }
+    final list = unique.values.toList()
+      ..sort((a, b) => b.voteAverage.compareTo(a.voteAverage));
+    return list.take(30).toList();
+  }
+
 }
