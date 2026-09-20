@@ -126,8 +126,8 @@ class CustomDrawer extends StatelessWidget {
                               ),
                             ),
                             onTap: () {
-                              onItemSelected?.call(index);
                               Navigator.of(context).pop();
+                              onItemSelected?.call(index);
                             },
                           ),
                         ),
