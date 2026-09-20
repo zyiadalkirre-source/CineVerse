@@ -131,6 +131,9 @@ class CustomDrawer extends StatelessWidget {
                             leading: Icon(item.icon),
                             title: Text(
                               item.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              softWrap: false,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w500,
                               ),
