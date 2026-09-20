@@ -132,7 +132,19 @@ jobs:
                       if "dependencies {" in text:
                           text = text.replace("dependencies {", "dependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'", 1)
 
-              text += f"""
+              if app_gradle.suffix == ".kts":
+                  text = re.sub(r"\n\s*kotlinOptions\s*\{.*?\n\s*\}", "", text, flags=re.S)
+                  if "import org.jetbrains.kotlin.gradle.dsl.JvmTarget" not in text:
+                      text = "import org.jetbrains.kotlin.gradle.dsl.JvmTarget\n\n" + text
+                  if "compilerOptions" not in text:
+                      text = text.replace("android {", """android {
+              kotlin {
+                  compilerOptions {
+                      jvmTarget.set(JvmTarget.JVM_17)
+                  }
+              }""", 1)
+              else:
+                  text += f"""
           android {{
               ndkVersion "27.0.12077973"
               compileOptions {{
