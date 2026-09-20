@@ -5,11 +5,11 @@ void main() {
   group('libraryGridColumnCount', () {
     test('uses two columns on phone widths', () {
       expect(libraryGridColumnCount(320), 2);
-      expect(libraryGridColumnCount(600), 2);
+      expect(libraryGridColumnCount(480), 2);
     });
 
     test('uses three columns on medium widths', () {
-      expect(libraryGridColumnCount(601), 3);
+      expect(libraryGridColumnCount(520), 3);
       expect(libraryGridColumnCount(900), 3);
     });
 
