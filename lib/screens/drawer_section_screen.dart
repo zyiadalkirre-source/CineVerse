@@ -74,7 +74,7 @@ class _DrawerSectionScreenState extends State<DrawerSectionScreen> {
         case DrawerSection.anime:
           items = await provider.topAnime();
         case DrawerSection.seasons:
-          items = await provider.jikan.seasonalNow();
+          items = await provider.seasonalNow();
         case DrawerSection.globalRating:
           items = await provider.topRated('en');
         case DrawerSection.arabicRating:
@@ -139,7 +139,7 @@ class _DrawerSectionScreenState extends State<DrawerSectionScreen> {
 
     for (final show in shows) {
       try {
-        final episodes = await provider.tmdb.getTvEpisodes(show.id, show.seasons!);
+        final episodes = await provider.getTvEpisodes(show.id, show.seasons!);
         for (final e in episodes) {
           final date = DateTime.tryParse((e['air_date'] ?? '').toString());
           if (date != null && !date.isBefore(DateTime(now.year, now.month, now.day))) {
