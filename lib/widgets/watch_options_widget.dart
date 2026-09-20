@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../models/watch_provider.dart';
+import '../models/watch_provider.dart';
 
 class WatchOptionsWidget extends StatelessWidget {
   const WatchOptionsWidget({
