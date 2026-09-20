@@ -54,7 +54,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final unread = _items.where((x) => (x['read'] ?? 0) == 0).length;
 
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: Directionality.of(context),
       child: Scaffold(
         appBar: AppBar(
           title: Text('الإشعارات${unread > 0 ? ' ($unread)' : ''}'),
