@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../core/errors/ai_error_normalizer.dart';
 import '../providers/ai_provider.dart';
 import '../services/ai_service.dart';
 
@@ -33,8 +34,7 @@ class _AiPosterScreenState extends State<AiPosterScreen> {
       });
     } catch (error) {
       if (!mounted) return;
-      final normalized = AiErrorNormalizer.normalize(error);
-      setState(() => _error = normalized.message);
+      setState(() => _error = AiErrorNormalizer.normalize(error).message);
     }
   }
 
@@ -64,8 +64,6 @@ class _AiPosterScreenState extends State<AiPosterScreen> {
         ].join('\n');
       });
     } on AiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
-    } on AiServiceException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } catch (error) {
       if (mounted) setState(() => _error = AiErrorNormalizer.normalize(error).message);
@@ -110,13 +108,7 @@ class _AiPosterScreenState extends State<AiPosterScreen> {
                   clipBehavior: Clip.antiAlias,
                   child: Padding(
                     padding: const EdgeInsets.all(18),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 120),
-                      child: SelectableText(
-                        _result,
-                        style: const TextStyle(height: 1.6),
-                      ),
-                    ),
+                    child: SelectableText(_result, style: const TextStyle(height: 1.6)),
                   ),
                 ),
               ],
@@ -151,22 +143,11 @@ class _PosterCard extends StatelessWidget {
                     children: [
                       Icon(Icons.image_search_outlined, size: 72, color: theme.colorScheme.primary),
                       const SizedBox(height: 18),
-                      const Text(
-                        'ابدأ بتحليل بوستر سينمائي',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
+                      const Text('ابدأ بتحليل بوستر سينمائي', textAlign: TextAlign.center, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 10),
-                      const Text(
-                        'اختر صورة واضحة من جهازك لمعرفة النوع والمزاج والألوان والرموز والجمهور المستهدف.',
-                        textAlign: TextAlign.center,
-                      ),
+                      const Text('اختر صورة واضحة من جهازك لمعرفة النوع والمزاج والألوان والرموز والجمهور المستهدف.', textAlign: TextAlign.center),
                       const SizedBox(height: 18),
-                      FilledButton.tonalIcon(
-                        onPressed: onPick,
-                        icon: const Icon(Icons.photo_library_outlined),
-                        label: const Text('اختيار صورة'),
-                      ),
+                      FilledButton.tonalIcon(onPressed: onPick, icon: const Icon(Icons.photo_library_outlined), label: const Text('اختيار صورة')),
                     ],
                   ),
                 ),
@@ -179,11 +160,7 @@ class _PosterCard extends StatelessWidget {
                     left: 12,
                     right: 12,
                     bottom: 12,
-                    child: FilledButton.tonalIcon(
-                      onPressed: onPick,
-                      icon: const Icon(Icons.photo_library_outlined),
-                      label: const Text('اختيار صورة أخرى'),
-                    ),
+                    child: FilledButton.tonalIcon(onPressed: onPick, icon: const Icon(Icons.photo_library_outlined), label: const Text('اختيار صورة أخرى')),
                   ),
                 ],
               ),
