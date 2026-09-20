@@ -168,4 +168,72 @@ void main() {
       expect(stored.voteAverage, 7.9);
     },
   );
+  test(
+    'does not overwrite a newer local library item with an older Firestore version',
+    () async {
+      const uid = 'lww-user';
+      final localItem = MediaItem(
+        id: 404,
+        title: 'Local Newer Movie',
+        overview: 'Local version',
+        mediaType: AppConstants.typeMovie,
+        voteAverage: 9.2,
+        voteCount: 1000,
+      );
+
+      await database.saveMedia(localItem);
+
+      final localRows = await rawDatabase.query(
+        AppConstants.tableLibrary,
+        where: 'key = ?',
+        whereArgs: ['movie:404'],
+        limit: 1,
+      );
+      final localUpdatedAt =
+          localRows.single['updated_at'] as int;
+
+      await firestore
+          .collection('users')
+          .doc(uid)
+          .collection(AppConstants.tableLibrary)
+          .doc('movie:404')
+          .set({
+        'id': 404,
+        'title': 'Older Cloud Movie',
+        'overview': 'Older remote version',
+        'media_type': AppConstants.typeMovie,
+        'vote_average': 1.0,
+        'vote_count': 1,
+        '_sync_deleted': false,
+        '_sync_client_updated_at': localUpdatedAt - 1000,
+        '_sync_updated_at': Timestamp.fromMillisecondsSinceEpoch(
+          localUpdatedAt - 1000,
+        ),
+      });
+
+      await sync.pullLibrary(uid);
+
+      final storedRows = await rawDatabase.query(
+        AppConstants.tableLibrary,
+        where: 'key = ?',
+        whereArgs: ['movie:404'],
+        limit: 1,
+      );
+      final stored = MediaItem.fromJson(
+        jsonDecode(storedRows.single['data']! as String)
+            as Map<String, dynamic>,
+      );
+
+      expect(stored.title, 'Local Newer Movie');
+      expect(stored.voteAverage, 9.2);
+
+      final outboxRows = await rawDatabase.query(
+        AppConstants.tableSyncOutbox,
+        where: 'entity_id = ?',
+        whereArgs: ['movie:404'],
+      );
+      expect(outboxRows, hasLength(1));
+      expect(outboxRows.single['synced_at'], isNull);
+    },
+  );
 }
