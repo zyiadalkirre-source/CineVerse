@@ -1,4 +1,67 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
-class ThemeScreen extends StatelessWidget{const ThemeScreen({super.key});@override Widget build(BuildContext context){final tp=context.watch<ThemeProvider>();return Scaffold(appBar:AppBar(title:const Text('الألوان والثيمات')),body:ListView(padding:const EdgeInsets.all(16),children:[const Text('ألوان جاهزة',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),const SizedBox(height:12),Wrap(spacing:12,runSpacing:12,children:ThemeProvider.presets.map((p){final selected=tp.seedColor.value==p.color;return InkWell(onTap:()=>tp.setSeed(Color(p.color)),child:Column(children:[CircleAvatar(radius:30,backgroundColor:Color(p.color),child:selected?const Icon(Icons.check,color:Colors.white):null),const SizedBox(height:5),Text(p.name)]));}).toList()),const SizedBox(height:30),Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(color:tp.effectiveSeed.withOpacity(.15),borderRadius:BorderRadius.circular(16),border:Border.all(color:tp.effectiveSeed.withOpacity(.5))),child:Column(children:[Icon(Icons.palette,color:tp.effectiveSeed,size:40),const SizedBox(height:8),const Text('اللون الحالي',style:TextStyle(fontWeight:FontWeight.bold)),const SizedBox(height:4),Text('#'+tp.effectiveSeed.value.toRadixString(16).padLeft(8,'0').substring(2).toUpperCase(),style:const TextStyle(fontFamily:'monospace'))]))]));}}
+
+class ThemeScreen extends StatelessWidget {
+  const ThemeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final tp = context.watch<ThemeProvider>();
+    final seed = tp.effectiveSeed;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('الألوان والثيمات')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text('ألوان جاهزة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: ThemeProvider.presets.map((preset) {
+              final selected = seed.value == preset.color;
+              return InkWell(
+                borderRadius: BorderRadius.circular(40),
+                onTap: () => tp.setSeed(Color(preset.color)),
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundColor: Color(preset.color),
+                      child: selected ? const Icon(Icons.check, color: Colors.white) : null,
+                    ),
+                    const SizedBox(height: 5),
+                    Text(preset.name),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 30),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: seed.withValues(alpha: .15),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: seed.withValues(alpha: .5)),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.palette, color: seed, size: 40),
+                const SizedBox(height: 8),
+                const Text('اللون الحالي', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text(
+                  '#${seed.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+                  style: const TextStyle(fontFamily: 'monospace'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
