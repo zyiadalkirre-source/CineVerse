@@ -32,7 +32,7 @@ class DatabaseService {
   static Future<void> createSchemaForTest(Database db) => _createSchema(db);
 
   static Future<void> _createSchema(Database db) async {
-    await db.execute('CREATE TABLE ${AppConstants.tableLibrary} (key TEXT PRIMARY KEY, data TEXT NOT NULL)');
+    await db.execute('CREATE TABLE ${AppConstants.tableLibrary} (key TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL DEFAULT 0)');
     await db.execute('CREATE TABLE ${AppConstants.tableChat} (id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL)');
     await db.execute('CREATE TABLE ${AppConstants.tableSearchHistory} (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL, created_at INTEGER NOT NULL)');
     await db.execute('CREATE TABLE ${AppConstants.tableEpisodeProgress} (key TEXT PRIMARY KEY, media_id INTEGER NOT NULL, media_type TEXT NOT NULL, season INTEGER NOT NULL, episode INTEGER NOT NULL, position_seconds INTEGER NOT NULL, duration_seconds INTEGER NOT NULL DEFAULT 0, episode_name TEXT NOT NULL DEFAULT "", updated_at INTEGER NOT NULL)');
@@ -65,6 +65,17 @@ class DatabaseService {
     if (oldVersion < 5) {
       await ContentCacheSchema.create(db);
     }
+
+    if (oldVersion < 6) {
+      await db.execute(
+        'ALTER TABLE ${AppConstants.tableLibrary} ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0',
+      );
+      final migrationTime = DateTime.now().millisecondsSinceEpoch;
+      await db.rawUpdate(
+        'UPDATE ${AppConstants.tableLibrary} SET updated_at = ? WHERE updated_at = 0',
+        [migrationTime],
+      );
+    }
   }
 
   Future<List<MediaItem>> getLibrary() async {
@@ -78,7 +89,11 @@ class DatabaseService {
     final db = await database;
     await db.insert(
       AppConstants.tableLibrary,
-      {'key': '${item.mediaType}:${item.id}', 'data': jsonEncode(item.toJson())},
+      {
+        'key': '${item.mediaType}:${item.id}',
+        'data': jsonEncode(item.toJson()),
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     if (enqueueSync) {
@@ -279,6 +294,47 @@ class DatabaseService {
 
   Future<void> cacheDetails(MediaItem item, {int? cachedAt}) =>
       cacheMediaItems([item], cachedAt: cachedAt);
+
+  Future<int> pruneExpiredCache({
+    Duration maxAge = const Duration(days: 7),
+  }) async {
+    if (maxAge.isNegative) {
+      throw ArgumentError.value(
+        maxAge,
+        'maxAge',
+        'Cache maxAge cannot be negative',
+      );
+    }
+
+    final db = await database;
+    final threshold = DateTime.now().subtract(maxAge).millisecondsSinceEpoch;
+
+    return db.transaction((txn) async {
+      final deletedMediaCount = await txn.delete(
+        AppConstants.tableMediaCache,
+        where: '''
+          cached_at < ?
+          AND NOT EXISTS (
+            SELECT 1
+            FROM ${AppConstants.tableLibrary} AS library
+            WHERE library.key =
+              ${AppConstants.tableMediaCache}.media_type
+              || ':'
+              || CAST(${AppConstants.tableMediaCache}.id AS TEXT)
+          )
+        ''',
+        whereArgs: [threshold],
+      );
+
+      await txn.delete(
+        AppConstants.tableTrendingCache,
+        where: 'cached_at < ?',
+        whereArgs: [threshold],
+      );
+
+      return deletedMediaCount;
+    });
+  }
 
   Future<void> clearContentCache() async {
     final db = await database;
