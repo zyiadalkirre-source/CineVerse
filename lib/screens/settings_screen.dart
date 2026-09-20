@@ -233,7 +233,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SwitchListTile(
               value: notifyNewEpisodes,
               onChanged: (value) => _setBool('notifyNewEpisodes', value),
-              title: const Text('تنبيه بجميع الحلقات الجديدة'),
+              title: const Text('تنبيه بالحلقات الجديدة'),
               subtitle: const Text(
                 'إرسال تنبيه عند اكتشاف حلقات جديدة لمسلسلاتك المفضلة',
               ),
@@ -324,7 +324,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text('اخلاء المسؤولية'),
               trailing: const Icon(Icons.chevron_left_rounded),
               onTap: () => _showInfoDialog(
-                title: 'اخلاء المسؤولية',
+                title: 'إخلاء المسؤولية',
                 message:
                     'CineVerse تطبيق لتنظيم واكتشاف المحتوى. توفر المحتوى ومعلوماته يعتمد على الخدمات والمصادر المرتبطة بالتطبيق.',
               ),
