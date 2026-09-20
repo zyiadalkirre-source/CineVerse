@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'watch_screen.dart';
 import '../core/constants.dart';
 import '../models/media_item.dart';
+import '../models/watch_provider.dart';
 import '../providers/media_provider.dart';
 import '../providers/ai_provider.dart';
 
@@ -17,6 +17,7 @@ class _DetailScreenState extends State<DetailScreen> {
   bool loading=false, episodesLoading=false;
   List<Map<String,dynamic>> episodes=[];
   List<MediaItem> recommendations=[];
+  List<WatchProvider> watchProviders=[];
   int season=1;
   int? selectedEpisodeNumber;
   @override void initState(){super.initState();item=widget.item;_load();}
@@ -26,6 +27,7 @@ class _DetailScreenState extends State<DetailScreen> {
     if(!mounted)return;
     setState(()=>item=x);
     try { final r=await p.recommendations(x,'ar'); if(mounted)setState(()=>recommendations=r.take(10).toList()); } catch(_){}
+    try { final providers=await p.tmdb.getWatchProviders(x.id,x.mediaType,region:'SY'); if(mounted)setState(()=>watchProviders=providers); } catch(_) {}
     if(x.mediaType=='tv' && (x.seasons??0)>0) _loadEpisodes(1);
   }
   Future<void> _loadEpisodes(int s) async {
@@ -119,7 +121,13 @@ class _DetailScreenState extends State<DetailScreen> {
           }),
         ],
         const SizedBox(height:16),
-        Wrap(spacing:8,children:[ElevatedButton.icon(onPressed:_note,icon:const Icon(Icons.note_add),label:const Text('ملاحظة')),ElevatedButton.icon(onPressed:loading?null:_ai,icon:const Icon(Icons.auto_awesome),label:const Text('تحليل AI')),if(item.trailerKey!=null)IconButton(onPressed:()=>launchUrl(Uri.parse('https://www.youtube.com/watch?v='+item.trailerKey!)),icon:const Icon(Icons.play_circle))]),
+        Wrap(spacing:8,children:[ElevatedButton.icon(onPressed:_note,icon:const Icon(Icons.note_add),label:const Text('ملاحظة')),ElevatedButton.icon(onPressed:loading?null:_ai,icon:const Icon(Icons.auto_awesome),label:const Text('تحليل AI')),if(item.trailerKey!=null)ElevatedButton.icon(onPressed:()=>_openTrailer(item.trailerKey!,item.title),icon:const Icon(Icons.play_circle_fill),label:const Text('التريلر الرسمي'))]),
+        if(watchProviders.isNotEmpty)...[
+          const SizedBox(height:18),
+          Text('متوفر رسمياً عبر',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold)),
+          const SizedBox(height:8),
+          Wrap(spacing:8,runSpacing:8,children:watchProviders.take(12).map((p)=>Chip(avatar:p.logoUrl.isEmpty?const Icon(Icons.tv):CircleAvatar(backgroundImage:NetworkImage(p.logoUrl)),label:Text(p.name))).toList()),
+        ],
         if(recommendations.isNotEmpty)...[const SizedBox(height:20),Text('اقتراحات مشابهة',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold)),SizedBox(height:180,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:recommendations.length,separatorBuilder:(_,__)=>const SizedBox(width:10),itemBuilder:(_,i)=>SizedBox(width:105,child:InkWell(
   onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>DetailScreen(item:recommendations[i]))),
   borderRadius:BorderRadius.circular(10),
@@ -133,10 +141,24 @@ class _DetailScreenState extends State<DetailScreen> {
       ]))),
     ]));
   }
-  void _openEpisode(Map<String,dynamic> episode){
+  Future<void> _openEpisode(Map<String,dynamic> episode) async {
     final number=(episode['episode_number'] as num?)?.toInt()??0;
     setState(()=>selectedEpisodeNumber=number);
-    final url=_episodeWatchUrl(episode);Navigator.of(context).push(MaterialPageRoute(builder:(_)=>WatchScreen(item:item, title:item.title,episodeName:(episode['name']??'حلقة').toString(),season:season,episode:(episode['episode_number'] as num?)?.toInt()??0,videoUrl:url)));}
+    final directUrl=_episodeWatchUrl(episode);
+    String? trailerKey;
+    if (directUrl == null) {
+      try {
+        final videos=await context.read<MediaProvider>().tmdb.getEpisodeVideos(item.id,season,number,lang:'ar');
+        trailerKey=context.read<MediaProvider>().tmdb.findYoutubeTrailerKey(videos);
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(builder:(_)=>WatchScreen(item:item,title:item.title,episodeName:(episode['name']??'حلقة').toString(),season:season,episode:number,videoUrl:directUrl,trailerKey:trailerKey)));
+  }
+
+  void _openTrailer(String key, String title) {
+    Navigator.of(context).push(MaterialPageRoute(builder:(_)=>WatchScreen(item:item,title:title,episodeName:'التريلر الرسمي',season:0,episode:0,videoUrl:null,trailerKey:key)));
+  }
   String? _episodeWatchUrl(Map<String,dynamic> episode){for(final key in const ['watch_url','video_url','stream_url','playback_url']){final value=episode[key]?.toString().trim();if(value!=null&&value.isNotEmpty)return value;}return null;}
   String _episodeRating(Map<String,dynamic> e){final value=e['vote_average'];return value is num?value.toStringAsFixed(1):'—';}
   Widget _statusButton(String l,String s){
