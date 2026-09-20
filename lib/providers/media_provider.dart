@@ -36,6 +36,12 @@ class MediaProvider extends ChangeNotifier {
   }
 
   Future<void> setStatus(MediaItem item, String status) async => upsert(item.copyWith(watchStatus: status));
+
+  Future<void> remove(MediaItem item) async {
+    _library.removeWhere((x) => x.id == item.id && x.mediaType == item.mediaType);
+    await database.deleteMedia(item);
+    notifyListeners();
+  }
   Future<void> setRating(MediaItem item, double? rating) async => upsert(item.copyWith(userRating: rating));
   Future<void> setNotes(MediaItem item, String notes) async => upsert(item.copyWith(notes: notes));
 
