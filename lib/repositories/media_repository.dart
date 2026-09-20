@@ -157,6 +157,7 @@ class MediaRepository {
 
   Future<List<MediaItem>> _searchRemote(String query, String lang) async {
     final unique = <String, MediaItem>{};
+    Object? lastError;
 
     Future<void> addTmdb(String requestedLanguage) async {
       try {
@@ -164,7 +165,9 @@ class MediaRepository {
         for (final item in items) {
           unique[item.mediaType + ':' + item.id.toString()] = item;
         }
-      } catch (_) {}
+      } catch (error) {
+        lastError = error;
+      }
     }
 
     await addTmdb(lang);
@@ -178,7 +181,13 @@ class MediaRepository {
         for (final item in anime) {
           unique[item.mediaType + ':' + item.id.toString()] = item;
         }
-      } catch (_) {}
+      } catch (error) {
+        lastError ??= error;
+      }
+    }
+
+    if (unique.isEmpty && lastError != null) {
+      Error.throwWithStackTrace(lastError!, StackTrace.current);
     }
 
     return unique.values.toList(growable: false);
