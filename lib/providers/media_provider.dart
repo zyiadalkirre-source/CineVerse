@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import '../core/constants.dart';
 import '../models/media_item.dart';
 import '../models/user_stats.dart';
@@ -41,11 +42,11 @@ class MediaProvider extends ChangeNotifier {
           );
         }
       } catch (e, st) {
-        debugPrint('Media notification check failed: $e\\n$st');
+        debugPrint('Media notification check failed: $e\n$st');
       }
     } catch (e, st) {
       error = e.toString();
-      debugPrint('MediaProvider load failed: $e\\n$st');
+      debugPrint('MediaProvider load failed: $e\n$st');
     } finally {
       loading = false;
       notifyListeners();
