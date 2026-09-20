@@ -13,6 +13,7 @@ import 'settings_screen.dart';
 import 'drawer_section_screen.dart';
 import 'notifications_screen.dart';
 import 'latest_updates_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/custom_drawer.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -24,8 +25,11 @@ class _HomeScreenState extends State<HomeScreen> {
   final pages = const [_Library(), _Discover(), AiHubScreen(), NotesScreen(), StatsScreen()];
   @override Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
+    final user = FirebaseAuth.instance.currentUser;
     return Scaffold(
       drawer: CustomDrawer(
+        userName: user?.displayName ?? '🌝 moon 🌝',
+        avatarUrl: user?.photoURL,
         selectedIndex: index,
         onNotifications: () {
           Navigator.push(
