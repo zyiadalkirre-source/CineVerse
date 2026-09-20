@@ -137,7 +137,7 @@ class _DrawerSectionScreenState extends State<DrawerSectionScreen> {
 
   Future<void> _toggleCustom(MediaItem item) async {
     final prefs = await SharedPreferences.getInstance();
-    final key = '\${item.mediaType}:\${item.id}';
+    final key = '${item.mediaType}:${item.id}';
 
     setState(() {
       if (customKeys.contains(key)) {
@@ -225,14 +225,14 @@ class _DrawerSectionScreenState extends State<DrawerSectionScreen> {
               itemCount: chars.length,
               separatorBuilder: (_, __) => const Divider(),
               itemBuilder: (_, i) => ListTile(
-                leading: CircleAvatar(child: Text('\${i + 1}')),
+                leading: CircleAvatar(child: Text('${i + 1}')),
                 title: Text(chars[i].key),
                 subtitle: Text(
                   widget.section == DrawerSection.popularCharacters
                       ? 'تكرار في مكتبتك'
                       : 'شخصية من بيانات مكتبتك',
                 ),
-                trailing: Text('\${chars[i].value}'),
+                trailing: Text('${chars[i].value}'),
               ),
             );
     }
@@ -295,7 +295,7 @@ class _DrawerSectionScreenState extends State<DrawerSectionScreen> {
                     leading: const Icon(Icons.event_available_rounded),
                     title: Text(show.title),
                     subtitle: Text(
-                      'م\${data['season']} • ح\${episode['episode_number'] ?? '—'} • \${(episode['name'] ?? 'حلقة').toString()}',
+                      'م${data['season']} • ح${episode['episode_number'] ?? '—'} • ${(episode['name'] ?? 'حلقة').toString()}',
                     ),
                     trailing: Text((episode['air_date'] ?? '—').toString()),
                   ),
@@ -312,7 +312,7 @@ class _DrawerSectionScreenState extends State<DrawerSectionScreen> {
               itemCount: items.length,
               itemBuilder: (_, i) {
                 final item = items[i];
-                final selected = customKeys.contains('\${item.mediaType}:\${item.id}');
+                final selected = customKeys.contains('${item.mediaType}:${item.id}');
 
                 return Card(
                   child: ListTile(
@@ -397,7 +397,7 @@ class _DrawerSectionScreenState extends State<DrawerSectionScreen> {
           const SizedBox(height: 6),
           Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
           Text(
-            '⭐ \${item.voteAverage.toStringAsFixed(1)} • \${item.year}',
+            '⭐ ${item.voteAverage.toStringAsFixed(1)} • ${item.year}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
