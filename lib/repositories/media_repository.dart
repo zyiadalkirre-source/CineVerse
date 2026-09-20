@@ -226,6 +226,48 @@ class MediaRepository {
     return controller.stream;
   }
 
+  Future<List<Map<String, dynamic>>> getTvEpisodes(
+    int id,
+    int season, {
+    String lang = 'ar',
+  }) {
+    return _tmdb.getTvEpisodes(id, season, lang: lang);
+  }
+
+  Future<List<Map<String, dynamic>>> getEpisodeVideos(
+    int tvId,
+    int season,
+    int episode, {
+    String? lang,
+  }) {
+    return _tmdb.getEpisodeVideos(
+      tvId,
+      season,
+      episode,
+      lang: lang,
+    );
+  }
+
+  Future<List<WatchProvider>> getWatchProviders(
+    int id,
+    String type, {
+    String region = 'SY',
+  }) {
+    return _tmdb.getWatchProviders(
+      id,
+      type,
+      region: region,
+    );
+  }
+
+  String? findYoutubeTrailerKey(List<Map<String, dynamic>> videos) {
+    return _tmdb.findYoutubeTrailerKey(videos);
+  }
+
+  Future<List<MediaItem>> getSeasonalAnime() {
+    return _jikan.seasonalNow();
+  }
+
   Future<List<MediaItem>> getLatestUpdates({
     String lang = 'ar',
     bool forceRefresh = false,
