@@ -27,8 +27,6 @@ jobs:
 
       - name: Ensure Android platform exists
         shell: bash
-        env:
-          FIREBASE_ANDROID_CONFIG_JSON: ${{ secrets.FIREBASE_ANDROID_CONFIG_JSON }}
         run: |
           if [ ! -d "android" ]; then
             flutter create . \
@@ -195,21 +193,64 @@ jobs:
           print("Android Gradle project prepared with Kotlin", kotlin_version, "and AGP", agp_version)
           PY
 
-          if [ -n "${FIREBASE_ANDROID_CONFIG_JSON:-}" ]; then
+      - name: Inject google-services.json
+        shell: bash
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          FIREBASE_ANDROID_CONFIG_JSON: ${{ secrets.FIREBASE_ANDROID_CONFIG_JSON }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "\${GOOGLE_SERVICES_JSON:-}" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" | base64 --decode > android/app/google-services.json
+            python3 -m json.tool android/app/google-services.json >/dev/null
+            echo "google-services.json injected from GOOGLE_SERVICES_JSON."
+          elif [ -n "\${FIREBASE_ANDROID_CONFIG_JSON:-}" ]; then
             printf '%s' "$FIREBASE_ANDROID_CONFIG_JSON" > android/app/google-services.json
+            python3 -m json.tool android/app/google-services.json >/dev/null
+            echo "google-services.json injected from legacy FIREBASE_ANDROID_CONFIG_JSON."
+          else
+            echo "GOOGLE_SERVICES_JSON is not configured; Firebase Android file injection skipped."
           fi
 
-          if [ -f android/app/google-services.json ] && [ -f android/app/build.gradle.kts ]; then
+      - name: Apply Google Services Gradle plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -f android/app/google-services.json ]; then
+            echo "No google-services.json found; Google Services plugin will not be applied."
+            exit 0
+          fi
+
+          if [ -f android/app/build.gradle.kts ]; then
             python3 - <<'PY'
           from pathlib import Path
-          p=Path("android/app/build.gradle.kts")
-          t=p.read_text()
-          if 'com.google.gms.google-services' not in t:
-              t += '\napply(plugin = "com.google.gms.google-services")\n'
+          p = Path("android/app/build.gradle.kts")
+          t = p.read_text()
+          marker = 'apply(plugin = "com.google.gms.google-services")'
+          if marker not in t:
+              t += f'\n{marker}\n'
               p.write_text(t)
           PY
+          elif [ -f android/app/build.gradle ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle")
+          t = p.read_text()
+          marker = "apply plugin: 'com.google.gms.google-services'"
+          if marker not in t:
+              t += f"\n{marker}\n"
+              p.write_text(t)
+          PY
+          else
+            echo "Android app Gradle file not found." >&2
+            exit 1
           fi
 
+          echo "Google Services Gradle plugin enabled."
+
+      - name: Install Android SDK 36
           python3 - <<'PY'
           from pathlib import Path
           props = Path("android/gradle.properties")
