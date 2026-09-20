@@ -71,10 +71,12 @@ jobs:
           # New Flutter templates declare AGP in settings.gradle via the plugins DSL.
           if settings_gradle.exists():
               text = settings_gradle.read_text()
-              import re
-              text = re.sub(r"(id\\s*\\(?[\"']com\\.android\\.application[\"']\\)?\\s+version\\s+[\"'])([0-9.]+)([\"'])", rf'\\g<1>{agp_version}\\g<3>', text)
+              # Flutter 3.47+ uses Kotlin DSL; patch the exact plugin declaration without regex.
+              text = text.replace('id("com.android.application") version "8.9.1"', f'id("com.android.application") version "{agp_version}"')
+              text = text.replace("id(\"com.android.application\") version \"8.7.3\"", f'id("com.android.application") version "{agp_version}"')
+              text = text.replace("id(\"org.jetbrains.kotlin.android\") version \"2.1.0\"", f'id("org.jetbrains.kotlin.android") version "{kotlin_version}"')
+              text = text.replace("id(\"org.jetbrains.kotlin.android\") version \"2.2.20\"", f'id("org.jetbrains.kotlin.android") version "{kotlin_version}"')
               settings_gradle.write_text(text)
-
           if wrapper_props.exists():
               text = wrapper_props.read_text()
               import re
@@ -84,15 +86,12 @@ jobs:
           for path in (settings_gradle, build_gradle):
               if path.exists():
                   text = path.read_text()
-                  import re
-                  text = re.sub(r'(org\\.jetbrains\\.kotlin\\.android[^\\n]*?version\\s+")([0-9.]+)(")', rf'\\g<1>{kotlin_version}\\g<3>', text)
-                  text = re.sub(r'(kotlin\\s*\\(?"android"\\)?\\s+version\\s+")([0-9.]+)(")', rf'\\g<1>{kotlin_version}\\g<3>', text)
-                  text = text.replace('"1.7.10"', f'"{kotlin_version}"')
-                  text = text.replace("'1.7.10'", f"'{kotlin_version}'")
-                  text = text.replace('"1.8.22"', f'"{kotlin_version}"')
-                  text = text.replace("'1.8.22'", f"'{kotlin_version}'")
+                  # Replace common Flutter template Kotlin versions without fragile regex parsing.
+                  for old in ("1.7.10", "1.8.22", "2.1.0", "2.2.20"):
+                      text = text.replace(f'"{old}"', f'"{kotlin_version}"')
+                      text = text.replace(f"'{old}'", f"'{kotlin_version}'")
+                  text = text.replace("org.jetbrains.kotlin.android", "org.jetbrains.kotlin.android")
                   path.write_text(text)
-
           if app_gradle.exists():
               text = app_gradle.read_text()
               if app_gradle.suffix == ".kts":
