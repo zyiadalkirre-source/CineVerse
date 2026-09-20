@@ -19,15 +19,6 @@ class _TurtleScreenState extends State<TurtleScreen> {
   static const _modelKey = 'turtle_model_path';
   static const _backendKey = 'turtle_backend';
 
-  // Open-license LiteRT-LM model from the litert-community Hugging Face org.
-  // The INT4 no-think variant is about 329 MiB and is intended for fast,
-  // concise on-device replies, especially on CPU.
-  static const _modelUrl =
-      'https://huggingface.co/litert-community/Qwen3-0.6B-int4/resolve/main/'
-      'qwen3_0.6b_nothink_q4_block32_ekv1280.litertlm?download=true';
-  static const _modelFilename =
-      'qwen3_0.6b_nothink_q4_block32_ekv1280.litertlm';
-
   final TurtleBrain _brain = TurtleBrain();
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
