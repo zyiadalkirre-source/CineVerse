@@ -7,7 +7,7 @@ class ContentCacheSchema {
   static const String trendingCacheTable = 'trending_cache';
 
   static const String createMediaCache = '''
-CREATE TABLE \$mediaCacheTable (
+CREATE TABLE $mediaCacheTable (
   id INTEGER NOT NULL,
   media_type TEXT NOT NULL,
   json_data TEXT NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE \$mediaCacheTable (
 ''';
 
   static const String createTrendingCache = '''
-CREATE TABLE \$trendingCacheTable (
+CREATE TABLE $trendingCacheTable (
   category_key TEXT PRIMARY KEY,
   media_ids_json TEXT NOT NULL,
   cached_at INTEGER NOT NULL
