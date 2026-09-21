@@ -1,39 +1,114 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+
 import '../models/media_item.dart';
+import '../models/watch_provider.dart';
 import '../providers/media_provider.dart';
+import '../services/tmdb_service.dart';
 import '../services/video_source_service.dart';
-import 'package:provider/provider.dart';
+import '../widgets/watch_options_widget.dart';
 
 class WatchScreen extends StatefulWidget {
+  const WatchScreen({
+    super.key,
+    required this.item,
+    required this.title,
+    required this.episodeName,
+    required this.season,
+    required this.episode,
+    this.videoUrl,
+    this.trailerKey,
+  });
+
   final MediaItem item;
   final String title;
   final String episodeName;
   final int season;
   final int episode;
   final String? videoUrl;
-  const WatchScreen({super.key, required this.item, required this.title, required this.episodeName, required this.season, required this.episode, required this.videoUrl});
-  @override State<WatchScreen> createState() => _WatchScreenState();
+  final String? trailerKey;
+
+  @override
+  State<WatchScreen> createState() => _WatchScreenState();
 }
 
 class _WatchScreenState extends State<WatchScreen> {
   VideoPlayerController? _controller;
+  YoutubePlayerController? _youtubeController;
   SharedPreferences? _prefs;
   late final MediaProvider _mediaProvider;
-  bool _initializing = false;
+
+  bool _loading = true;
   bool _fullscreen = false;
-  String? _error;
+  bool _showTrailer = false;
+  String? _resolvedUrl;
+  String? _resolvedTrailerKey;
+  List<WatchProvider> _providers = const [];
   int _lastSyncedSecond = -1;
   DateTime _lastLocalSave = DateTime.fromMillisecondsSinceEpoch(0);
   bool _savingPosition = false;
-  String get _progressKey => 'watch_progress_${widget.title}_${widget.season}_${widget.episode}';
 
-  @override void initState() { super.initState(); _mediaProvider = context.read<MediaProvider>(); _prepare(); }
+  bool get _isEpisode => widget.season > 0 && widget.episode > 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _mediaProvider = context.read<MediaProvider>();
+    _prepare();
+  }
+
   Future<void> _prepare() async {
-    _prefs = await SharedPreferences.getInstance();
+    String? direct = widget.videoUrl?.trim();
+    String? trailer = widget.trailerKey?.trim();
+
+    try {
+      if (direct == null || direct.isEmpty) {
+        direct = await VideoSourceService.instance.resolve(
+          item: widget.item,
+          season: widget.season,
+          episode: widget.episode,
+        );
+      }
+
+      final tmdb = TmdbService();
+      final type = widget.item.mediaType;
+      if ((trailer == null || trailer.isEmpty) && type != 'anime') {
+        final videos = _isEpisode
+            ? await tmdb.getEpisodeVideos(widget.item.id, widget.season, widget.episode, lang: 'ar')
+            : await tmdb.getVideos(widget.item.id, type, lang: 'ar');
+        trailer = tmdb.findYoutubeTrailerKey(videos);
+      }
+
+      if (type != 'anime') {
+        _providers = await tmdb.getWatchProviders(widget.item.id, type, region: 'SY');
+      }
+      tmdb.dispose();
+    } catch (error) {
+    }
+
     if (!mounted) return;
+    setState(() {
+      _resolvedUrl = direct;
+      _resolvedTrailerKey = trailer;
+      _loading = false;
+    });
+
+    if (_resolvedUrl != null && _resolvedUrl!.isNotEmpty) {
+      await _initializeDirect();
+    } else if ((_resolvedTrailerKey ?? '').isNotEmpty) {
+      _showTrailer = true;
+      _createYoutubeController();
+    }
+  }
+
+  Future<void> _initializeDirect() async {
+    final prefs = await SharedPreferences.getInstance();
+    _prefs = prefs;
+
     final episodeSaved = await _mediaProvider.getEpisodeProgress(
       item: widget.item,
       season: widget.season,
@@ -41,52 +116,71 @@ class _WatchScreenState extends State<WatchScreen> {
     );
     final saved = episodeSaved?['position_seconds'] is int
         ? episodeSaved!['position_seconds'] as int
-        : (_prefs?.getInt(_progressKey) ?? (widget.item.lastWatchedSeason == widget.season && widget.item.lastWatchedEpisode == widget.episode ? widget.item.lastWatchedSeconds : 0));
-    String? resolvedUrl = widget.videoUrl?.trim();
-    if (resolvedUrl == null || resolvedUrl.isEmpty) {
-      resolvedUrl = await VideoSourceService.instance.resolve(
-        item: widget.item,
-        season: widget.season,
-        episode: widget.episode,
-      );
-    }
-    if (resolvedUrl == null || resolvedUrl.isEmpty) {
-      if (mounted) setState(() => _error = 'لا يوجد مصدر مشاهدة فعلي لهذه الحلقة حالياً.');
+        : prefs.getInt(_progressKey) ?? 0;
+
+    final uri = Uri.tryParse(_resolvedUrl!);
+    if (uri == null || !uri.hasScheme) {
+      if (mounted) setState(() {});
       return;
     }
-    final uri = Uri.tryParse(resolvedUrl);
-    if (uri == null || !uri.hasScheme) { if (mounted) setState(() => _error = 'رابط المشاهدة غير صالح.'); return; }
-    setState(() => _initializing = true);
+
     try {
-      final c = VideoPlayerController.networkUrl(uri);
-      _controller = c;
-      await c.initialize();
-      final pos = Duration(seconds: saved);
-      if (pos > Duration.zero && pos < c.value.duration) await c.seekTo(pos);
-      c.addListener(_savePosition);
-      if (mounted) setState(() => _initializing = false);
+      final controller = VideoPlayerController.networkUrl(uri);
+      _controller = controller;
+      await controller.initialize();
+      final position = Duration(seconds: saved);
+      if (position > Duration.zero && position < controller.value.duration) {
+        await controller.seekTo(position);
+      }
+      controller.addListener(_savePosition);
+      if (mounted) setState(() {});
     } catch (_) {
-      _controller?.dispose(); _controller = null;
-      if (mounted) setState(() { _initializing = false; _error = 'تعذر تشغيل مصدر الفيديو. تأكد أن الرابط يعمل ويدعم الفيديو.'; });
+      _controller?.dispose();
+      _controller = null;
+      if (mounted) setState(() {});
     }
   }
-  Future<void> _savePosition() async {
-    final c = _controller; final p = _prefs;
-    if (c == null || p == null || !c.value.isInitialized) return;
-    final seconds = c.value.position.inSeconds;
-    if (seconds <= 0 || _savingPosition) return;
 
-    // VideoPlayer listeners can fire many times per second. Throttle persistence
-    // so playback does not cause a database/SharedPreferences write on every tick.
+  void _createYoutubeController() {
+    final key = _resolvedTrailerKey?.trim();
+    if (key == null || key.isEmpty) return;
+    _youtubeController?.dispose();
+    _youtubeController = YoutubePlayerController(
+      initialVideoId: key,
+      flags: const YoutubePlayerFlags(autoPlay: true, mute: false, enableCaption: true),
+    );
+    if (mounted) setState(() {});
+  }
+
+  void _playTrailer() {
+    if ((_resolvedTrailerKey ?? '').isEmpty) return;
+    setState(() => _showTrailer = true);
+    _createYoutubeController();
+  }
+
+  void _playDirect() {
+    setState(() => _showTrailer = false);
+    if (_controller == null) _initializeDirect();
+  }
+
+  String get _progressKey => 'watch_progress_${widget.item.mediaType}_${widget.item.id}_${widget.season}_${widget.episode}';
+
+  Future<void> _savePosition() async {
+    final controller = _controller;
+    final prefs = _prefs;
+    if (controller == null || prefs == null || !controller.value.isInitialized || !_isEpisode) return;
+
+    final seconds = controller.value.position.inSeconds;
+    if (seconds <= 0 || _savingPosition) return;
     final now = DateTime.now();
     final shouldSync = (seconds - _lastSyncedSecond).abs() >= 5;
-    final shouldSaveLocal = now.difference(_lastLocalSave) >= const Duration(seconds: 2);
-    if (!shouldSync && !shouldSaveLocal) return;
+    final shouldSave = now.difference(_lastLocalSave) >= const Duration(seconds: 2);
+    if (!shouldSync && !shouldSave) return;
 
     _savingPosition = true;
     try {
-      if (shouldSaveLocal) {
-        await p.setInt(_progressKey, seconds);
+      if (shouldSave) {
+        await prefs.setInt(_progressKey, seconds);
         _lastLocalSave = now;
       }
       if (mounted && shouldSync) {
@@ -97,56 +191,157 @@ class _WatchScreenState extends State<WatchScreen> {
           season: widget.season,
           episode: widget.episode,
           episodeName: widget.episodeName,
-          durationSeconds: c.value.duration.inSeconds,
+          durationSeconds: controller.value.duration.inSeconds,
         );
       }
     } finally {
       _savingPosition = false;
     }
   }
+
   Future<void> _seek(int seconds) async {
-    final c = _controller; if (c == null || !c.value.isInitialized) return;
-    var target = c.value.position + Duration(seconds: seconds);
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    var target = controller.value.position + Duration(seconds: seconds);
     if (target < Duration.zero) target = Duration.zero;
-    if (target > c.value.duration) target = c.value.duration;
-    await c.seekTo(target);
+    if (target > controller.value.duration) target = controller.value.duration;
+    await controller.seekTo(target);
   }
+
   Future<void> _fullscreenToggle() async {
     _fullscreen = !_fullscreen;
-    if (_fullscreen) {
-      await SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    } else {
-      await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    }
+    await SystemChrome.setPreferredOrientations(
+      _fullscreen ? [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight] : [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown],
+    );
+    await SystemChrome.setEnabledSystemUIMode(_fullscreen ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge);
     if (mounted) setState(() {});
   }
-  @override void dispose() { _savePosition(); _controller?.removeListener(_savePosition); _controller?.dispose(); SystemChrome.setPreferredOrientations([]); SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); super.dispose(); }
-  String _time(Duration d) { final h=d.inHours; final m=d.inMinutes.remainder(60).toString().padLeft(2,'0'); final s=d.inSeconds.remainder(60).toString().padLeft(2,'0'); return h>0 ? h.toString()+':'+m+':'+s : m+':'+s; }
-  @override Widget build(BuildContext context) {
-    final c=_controller; final ready=c!=null && c.value.isInitialized;
-    return Scaffold(backgroundColor: Colors.black, appBar: _fullscreen ? null : AppBar(title: Text('${widget.title} — م${widget.season} ح${widget.episode}')), body: SafeArea(top:!_fullscreen,bottom:!_fullscreen,child:Center(child: ready ? AspectRatio(aspectRatio:c.value.aspectRatio==0?16/9:c.value.aspectRatio,child:Stack(alignment:Alignment.bottomCenter,children:[VideoPlayer(c),_Controls(controller:c,format:_time,onSeek:_seek,onFullscreen:_fullscreenToggle,fullscreen:_fullscreen)])) : _Status(loading:_initializing,error:_error,episodeName:widget.episodeName))));
-  }
-}
 
-class _Status extends StatelessWidget {
-  final bool loading; final String? error; final String episodeName;
-  const _Status({required this.loading, required this.error, required this.episodeName});
-  @override Widget build(BuildContext context) {
-    if (loading) return const Column(mainAxisSize:MainAxisSize.min,children:[CircularProgressIndicator(),SizedBox(height:12),Text('جاري تجهيز المشغل...',style:TextStyle(color:Colors.white))]);
-    return Padding(padding:const EdgeInsets.all(24),child:Column(mainAxisSize:MainAxisSize.min,children:[const Icon(Icons.video_library_outlined,color:Colors.white70,size:64),const SizedBox(height:16),Text(error??'لا يوجد مصدر مشاهدة',textAlign:TextAlign.center,style:const TextStyle(color:Colors.white,fontSize:16)),const SizedBox(height:10),Text(episodeName,textAlign:TextAlign.center,style:const TextStyle(color:Colors.white60)),const SizedBox(height:12),const Text('CineVerse لن يضع رابطاً وهمياً. يجب أن يصل رابط فيديو قانوني وموثوق من مزود المحتوى أو من خدمة الباك-إند.',textAlign:TextAlign.center,style:TextStyle(color:Colors.white54,fontSize:12))]));
+  @override
+  void dispose() {
+    _savePosition();
+    _controller?.removeListener(_savePosition);
+    _controller?.dispose();
+    _youtubeController?.dispose();
+    SystemChrome.setPreferredOrientations([]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final directReady = _controller?.value.isInitialized == true;
+    final trailer = _youtubeController;
+
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: _fullscreen
+          ? null
+          : AppBar(
+              title: Text(_isEpisode ? '${widget.title} — م${widget.season} ح${widget.episode}' : widget.title),
+            ),
+      body: SafeArea(
+        top: !_fullscreen,
+        bottom: !_fullscreen,
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              if (_showTrailer && trailer != null)
+                YoutubePlayerBuilder(
+                  player: YoutubePlayer(
+                    controller: trailer,
+                    showVideoProgressIndicator: true,
+                    progressIndicatorColor: Theme.of(context).colorScheme.primary,
+                  ),
+                  builder: (context, player) => AspectRatio(aspectRatio: 16 / 9, child: player),
+                )
+              else if (directReady)
+                AspectRatio(
+                  aspectRatio: _controller!.value.aspectRatio == 0 ? 16 / 9 : _controller!.value.aspectRatio,
+                  child: Stack(
+                    alignment: Alignment.bottomCenter,
+                    children: [
+                      VideoPlayer(_controller!),
+                      _Controls(controller: _controller!, onSeek: _seek, onFullscreen: _fullscreenToggle, fullscreen: _fullscreen),
+                    ],
+                  ),
+                )
+              else
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Icon(Icons.video_library_outlined, color: Colors.white70, size: 64),
+                      SizedBox(height: 12),
+                      Text('لا يوجد مصدر مباشر متاح حالياً.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white)),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+                child: WatchOptionsWidget(
+                  directUrl: _resolvedUrl,
+                  trailerKey: _resolvedTrailerKey,
+                  providers: _providers,
+                  onPlayDirect: _resolvedUrl == null ? null : _playDirect,
+                  onPlayTrailer: _resolvedTrailerKey == null ? null : _playTrailer,
+                  onAddToWatchlist: () async {
+                    await _mediaProvider.setStatus(widget.item, 'not_watched');
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تمت إضافة العمل إلى القائمة.')));
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
 class _Controls extends StatelessWidget {
-  final VideoPlayerController controller; final String Function(Duration) format; final Future<void> Function(int) onSeek; final Future<void> Function() onFullscreen; final bool fullscreen;
-  const _Controls({required this.controller,required this.format,required this.onSeek,required this.onFullscreen,required this.fullscreen});
-  @override Widget build(BuildContext context) {
-    final v=controller.value;
-    return Container(padding:const EdgeInsets.fromLTRB(8,40,8,6),decoration:const BoxDecoration(gradient:LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Colors.transparent,Colors.black87])),child:Column(mainAxisAlignment:MainAxisAlignment.end,children:[
-      VideoProgressIndicator(controller,allowScrubbing:true,padding:const EdgeInsets.symmetric(vertical:6),colors:const VideoProgressColors(playedColor:Colors.red,bufferedColor:Colors.white38,backgroundColor:Colors.white24)),
-      Row(children:[IconButton(color:Colors.white,icon:Icon(v.isPlaying?Icons.pause:Icons.play_arrow),onPressed:()=>v.isPlaying?controller.pause():controller.play()),IconButton(color:Colors.white,icon:const Icon(Icons.replay_10),onPressed:()=>onSeek(-10)),IconButton(color:Colors.white,icon:const Icon(Icons.forward_10),onPressed:()=>onSeek(10)),Expanded(child:Text(format(v.position)+' / '+format(v.duration),style:const TextStyle(color:Colors.white,fontSize:12),textAlign:TextAlign.center)),IconButton(color:Colors.white,icon:Icon(fullscreen?Icons.fullscreen_exit:Icons.fullscreen),onPressed:onFullscreen)]),
-    ]));
+  const _Controls({required this.controller, required this.onSeek, required this.onFullscreen, required this.fullscreen});
+
+  final VideoPlayerController controller;
+  final Future<void> Function(int) onSeek;
+  final Future<void> Function() onFullscreen;
+  final bool fullscreen;
+
+  String _time(Duration value) {
+    final h = value.inHours;
+    final m = value.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = value.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return h > 0 ? '$h:$m:$s' : '$m:$s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = controller.value;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 40, 8, 6),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87]),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          VideoProgressIndicator(controller, allowScrubbing: true, padding: const EdgeInsets.symmetric(vertical: 6), colors: const VideoProgressColors(playedColor: Colors.red, bufferedColor: Colors.white38, backgroundColor: Colors.white24)),
+          Row(
+            children: [
+              IconButton(color: Colors.white, icon: Icon(value.isPlaying ? Icons.pause : Icons.play_arrow), onPressed: () => value.isPlaying ? controller.pause() : controller.play()),
+              IconButton(color: Colors.white, icon: const Icon(Icons.replay_10), onPressed: () => onSeek(-10)),
+              IconButton(color: Colors.white, icon: const Icon(Icons.forward_10), onPressed: () => onSeek(10)),
+              Expanded(child: Text('${_time(value.position)} / ${_time(value.duration)}', style: const TextStyle(color: Colors.white, fontSize: 12), textAlign: TextAlign.center)),
+              IconButton(color: Colors.white, icon: Icon(fullscreen ? Icons.fullscreen_exit : Icons.fullscreen), onPressed: onFullscreen),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

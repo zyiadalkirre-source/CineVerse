@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/media_item.dart';
 import '../providers/ai_provider.dart';
 import '../providers/media_provider.dart';
+import '../services/ai_service.dart';
 
 class AiToolsScreen extends StatefulWidget {
   const AiToolsScreen({super.key});
@@ -24,8 +25,10 @@ class _AiToolsScreenState extends State<AiToolsScreen> {
     try {
       final value = await action();
       if (mounted) setState(() => result = value);
-    } catch (e) {
-      if (mounted) setState(() => result = e.toString());
+    } on AiServiceException catch (e) {
+      if (mounted) setState(() => result = e.message);
+    } catch (_) {
+      if (mounted) setState(() => result = 'حدث خطأ أثناء تنفيذ أداة الذكاء الاصطناعي. حاول مرة أخرى.');
     } finally {
       if (mounted) setState(() => loading = false);
     }

@@ -22,7 +22,7 @@ class _LatestUpdatesScreenState extends State<LatestUpdatesScreen> {
     try {
       final provider = context.read<MediaProvider>();
       final language = context.read<SettingsProvider>().locale.languageCode;
-      final result = await provider.tmdb.getLatestUpdates(lang: language);
+      final result = await provider.latestUpdates(lang: language);
       if (!mounted) return;
       setState(() { items = result; loading = false; error = null; });
     } catch (e) {
