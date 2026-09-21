@@ -263,12 +263,31 @@ jobs:
           test -f build/app/outputs/flutter-apk/app-release.apk
           ls -lh build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Show APK signing certificate SHA-1
+      - name: Show APK signing certificate
         shell: bash
         run: |
           set -euo pipefail
-          echo "===== APK signing certificate ====="
-          keytool -printcert -jarfile build/app/outputs/flutter-apk/app-release.apk | sed -n '/Owner:/p;/Issuer:/p;/SHA1:/p;/SHA-256:/p'
+
+          APK_PATH="$(find build/app/outputs -name '*.apk' -type f | head -n 1)"
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK found under build/app/outputs"
+            exit 1
+          fi
+
+          APKSIGNER="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          if [ -z "$APKSIGNER" ]; then
+            echo "apksigner was not found in Android build-tools"
+            find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name apksigner -print 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "APK Path: $APK_PATH"
+          echo "Using: $APKSIGNER"
+          echo "═══════════════════════════════════"
+          echo "SIGNING CERTIFICATES"
+          echo "═══════════════════════════════════"
+          "$APKSIGNER" verify --print-certs "$APK_PATH"
+          echo "═══════════════════════════════════"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
