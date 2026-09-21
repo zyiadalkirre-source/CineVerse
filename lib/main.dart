@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
@@ -22,33 +24,87 @@ import 'services/cloud_sync_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  FlutterError.onError = (details) {
+    FlutterError.dumpErrorToConsole(details);
+  };
+  ErrorWidget.builder = (_) => const _ReleaseErrorView();
+
   if (kIsWeb) {
     databaseFactory = databaseFactoryFfiWeb;
   }
 
-  // Optional startup services must never prevent the UI from launching.
+  // Firebase configuration is needed before runApp because it controls whether
+  // the authenticated provider is registered. Cap initialization so a stalled
+  // native/plugin startup cannot leave the release build on a blank screen.
   try {
-    await CacheService.init();
+    await FirebaseBootstrap.initialize().timeout(const Duration(seconds: 5));
+  } catch (_) {
+    FirebaseBootstrap.configured = false;
+  }
+
+  // API configuration is safe to time-box: compile-time dart-defines remain the
+  // fallback when secure storage is unavailable or slow.
+  try {
+    await ApiConfig.init().timeout(const Duration(seconds: 3));
+  } catch (_) {}
+
+  // Always render the first frame before optional native services start.
+  runApp(const CineVerseApp());
+
+  unawaited(_initializeOptionalServices());
+}
+
+Future<void> _initializeOptionalServices() async {
+  try {
+    await CacheService.init().timeout(const Duration(seconds: 5));
   } catch (_) {}
 
   try {
-    await ApiConfig.init();
+    await NotificationService.init().timeout(const Duration(seconds: 5));
   } catch (_) {}
-
-  try {
-    await NotificationService.init();
-  } catch (_) {}
-
-  await FirebaseBootstrap.initialize();
 
   if (FirebaseBootstrap.configured) {
     try {
-      await AuthService.instance.initialize();
+      await AuthService.instance.initialize().timeout(const Duration(seconds: 5));
       CloudSyncService.instance.start();
     } catch (_) {}
   }
+}
 
-  runApp(const CineVerseApp());
+class _ReleaseErrorView extends StatelessWidget {
+  const _ReleaseErrorView();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF5F5FA),
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 56),
+                const SizedBox(height: 16),
+                const Text(
+                  'تعذر تحميل CineVerse',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'حدث خطأ أثناء تشغيل الواجهة. أعد فتح التطبيق وحاول مرة أخرى.',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class CineVerseApp extends StatelessWidget {
