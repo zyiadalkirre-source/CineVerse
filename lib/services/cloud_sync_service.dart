@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../core/constants.dart';
+import '../core/firebase_bootstrap.dart';
 import '../models/media_item.dart';
 import 'database_service.dart';
 
@@ -66,6 +67,10 @@ class CloudSyncService {
   FirebaseAuth get _auth => _authOverride ?? FirebaseAuth.instance;
 
   void start() {
+    if (!FirebaseBootstrap.configured) {
+      debugPrint('ℹ️ Cloud sync skipped: Firebase is not configured.');
+      return;
+    }
     if (_started) return;
 
     _started = true;
@@ -95,6 +100,11 @@ class CloudSyncService {
   }
 
   Future<void> syncCurrentUser() async {
+    if (!FirebaseBootstrap.configured) {
+      throw const CloudSyncException(
+        'Firebase غير مهيأ، لذلك لا يمكن مزامنة البيانات السحابية.',
+      );
+    }
     if (_running) return;
 
     final user = _auth.currentUser;
@@ -420,6 +430,9 @@ class CloudSyncService {
 
   /// Pulls the current user's library and returns the resulting local state.
   Future<List<MediaItem>> downloadLibrary() async {
+    if (!FirebaseBootstrap.configured) {
+      return _local.getLibrary();
+    }
     final user = _auth.currentUser;
     if (user != null) {
       await pullLibrary(user.uid);
