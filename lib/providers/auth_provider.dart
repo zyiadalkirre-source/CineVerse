@@ -8,11 +8,11 @@ import '../services/auth_service.dart';
 class AuthProvider extends ChangeNotifier {
   AuthProvider({AuthClient? authClient})
       : _authClient = authClient ?? AuthService.instance {
-    _currentUser = _authClient.currentUser;
-    _subscription = _authClient.authStateChanges.listen(
-      _onAuthStateChanged,
-      onError: _onAuthError,
-    );
+    // Production subscribes only after Firebase has initialized.
+    // Tests may inject a fake client without Firebase.
+    if (authClient != null || AuthService.isReady) {
+      _start();
+    }
   }
 
   final AuthClient _authClient;
@@ -26,6 +26,15 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _currentUser != null;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  bool get firebaseReady => AuthService.isReady;
+
+  void _start() {
+    _currentUser = _authClient.currentUser;
+    _subscription = _authClient.authStateChanges.listen(
+      _onAuthStateChanged,
+      onError: _onAuthError,
+    );
+  }
 
   void _onAuthStateChanged(User? user) {
     _currentUser = user;
