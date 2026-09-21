@@ -82,7 +82,7 @@ class AuthService implements AuthClient {
       }
 
       if (!_google.supportsAuthenticate()) {
-        throw const AuthException(
+        throw AuthException(
           'تسجيل الدخول باستخدام Google غير مدعوم على هذه المنصة.',
           'google-auth-unsupported',
         );
