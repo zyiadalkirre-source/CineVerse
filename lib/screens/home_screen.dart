@@ -11,6 +11,7 @@ import 'ai_hub_screen.dart';
 import 'notes_screen.dart';
 import 'stats_screen.dart';
 import 'settings_screen.dart';
+import 'clips_screen.dart';
 import 'drawer_section_screen.dart';
 import 'notifications_screen.dart';
 import 'latest_updates_screen.dart';
