@@ -32,6 +32,24 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
+      - name: Patch flutter_inappwebview for AGP 9
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_gradle="$(find "$PUB_CACHE/hosted/pub.dev" -path '*/flutter_inappwebview_android-*/android/build.gradle' -print -quit)"
+          if [ -z "$package_gradle" ]; then
+            echo "flutter_inappwebview_android Android Gradle file was not found."
+            exit 1
+          fi
+
+          if grep -q "getDefaultProguardFile('proguard-android.txt')" "$package_gradle"; then
+            sed -i "s/getDefaultProguardFile('proguard-android.txt')/getDefaultProguardFile('proguard-android-optimize.txt')/g" "$package_gradle"
+            echo "Patched flutter_inappwebview_android for AGP 9 compatibility."
+          else
+            echo "No legacy proguard-android.txt reference found; leaving dependency unchanged."
+          fi
+
       - name: Inject google-services.json
         shell: bash
         env:
