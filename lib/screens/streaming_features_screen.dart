@@ -311,8 +311,8 @@ class _StreamingFeaturesScreenState extends State<StreamingFeaturesScreen> {
           ),
           FilledButton.icon(
             onPressed: () async {
-              await SharePlus.instance.share(
-                ShareParams(text: 'انضم إلى Watch Party في CineVerse. الرمز: $code'),
+              await Share.share(
+                'انضم إلى Watch Party في CineVerse. الرمز: ' + code,
               );
             },
             icon: const Icon(Icons.share_rounded),
