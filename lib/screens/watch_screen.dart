@@ -141,8 +141,9 @@ class _WatchScreenState extends State<WatchScreen> {
       }
 
       final defaultSpeed = prefs.getDouble('stream_defaultSpeed') ?? 1.0;
-      await controller.setPlaybackSpeed(defaultSpeed.clamp(0.25, 2.0));
-      _playbackSpeed = defaultSpeed.clamp(0.25, 2.0);
+      final safeSpeed = defaultSpeed.clamp(0.25, 2.0).toDouble();
+      await controller.setPlaybackSpeed(safeSpeed);
+      _playbackSpeed = safeSpeed;
 
       controller.addListener(_onVideoUpdate);
       if (mounted) setState(() {});
