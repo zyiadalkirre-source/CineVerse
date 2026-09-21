@@ -109,7 +109,11 @@ class _StreamingFeaturesScreenState extends State<StreamingFeaturesScreen> {
     );
   }
 
-  void _showPicker(String title, List<MediaItem> items) {
+  void _showPicker(
+    String title,
+    List<MediaItem> items, {
+    Future<void> Function(MediaItem item)? onSelected,
+  }) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -131,9 +135,14 @@ class _StreamingFeaturesScreenState extends State<StreamingFeaturesScreen> {
                 leading: _Poster(item: item, size: 46),
                 title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Text(item.year + ' • ' + item.mediaType),
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(context);
-                  Navigator.push(
+                  if (onSelected != null) {
+                    await onSelected(item);
+                    return;
+                  }
+                  if (!mounted) return;
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => DetailScreen(item: item)),
                   );
@@ -276,7 +285,31 @@ class _StreamingFeaturesScreenState extends State<StreamingFeaturesScreen> {
       _showMessage('أضف عملاً واحداً على الأقل للمشاركة.');
       return;
     }
-    _showPicker('اختر عملاً للمشاركة', items);
+    _showPicker(
+      'اختر عملاً للمشاركة',
+      items,
+      onSelected: _shareTitle,
+    );
+  }
+
+  Future<void> _shareTitle(MediaItem item) async {
+    final details = item.year == '—'
+        ? item.title
+        : item.title + ' • ' + item.year;
+    await Share.share(
+      'شاهد اقتراحي من CineVerse: ' + details,
+    );
+  }
+
+  Future<void> _trending() async {
+    final provider = context.read<MediaProvider>();
+    try {
+      final items = await provider.trending('ar');
+      if (!mounted) return;
+      _showPicker('الرائج الآن', items);
+    } catch (_) {
+      _showMessage('تعذر تحميل الرائج الآن، حاول مرة أخرى.');
+    }
   }
 
   Future<void> _generatePartyCode() async {
@@ -384,7 +417,7 @@ class _StreamingFeaturesScreenState extends State<StreamingFeaturesScreen> {
     _Feature.action('Daily Mix', 'قائمة يومية عشوائية من مكتبتك.', Icons.queue_music_rounded, _dailyMix),
     _Feature.action('Top 10 محلي', 'أعلى الأعمال تقييماً داخل مكتبتك.', Icons.leaderboard_rounded, _top10),
     _Feature.action('الجديد والساخن', 'انتقل مباشرة إلى آخر التحديثات.', Icons.fiber_new_rounded, () => _open(const LatestUpdatesScreen())),
-    _Feature.action('الرائج الآن', 'اكتشف آخر ما يتم تحديثه في المصدر.', Icons.local_fire_department_rounded, () => _open(const LatestUpdatesScreen())),
+    _Feature.action('الرائج الآن', 'اكتشف المحتوى الرائج من المصدر.', Icons.local_fire_department_rounded, _trending),
     _Feature.action('مواعيد الحلقات', 'تابع تواريخ نزول الحلقات والمواسم.', Icons.event_available_rounded, () => _open(const DrawerSectionScreen(section: DrawerSection.episodeDates))),
     _Feature.action('البحث المتقدم', 'البحث والمرشحات وسجل البحث.', Icons.search_rounded, () => _open(const SearchScreen())),
     _Feature.action('Clips', 'مقاطع قصيرة وتريلرات عمودية.', Icons.smart_display_rounded, () => _open(const ClipsScreen())),
