@@ -94,7 +94,7 @@ class AuthService implements AuthClient {
       final idToken = googleUser.authentication.idToken;
 
       if (idToken == null || idToken.isEmpty) {
-        throw const AuthException(
+        throw AuthException(
           'لم يتم استلام رمز Google. تحقق من إعداد OAuth وFirebase.',
           'missing-google-id-token',
         );
