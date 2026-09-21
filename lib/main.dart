@@ -33,28 +33,29 @@ Future<void> main() async {
     databaseFactory = databaseFactoryFfiWeb;
   }
 
-  // Firebase configuration is needed before runApp because it controls whether
-  // the authenticated provider is registered. Cap initialization so a stalled
-  // native/plugin startup cannot leave the release build on a blank screen.
+  // IMPORTANT: render the first Flutter frame before any native/plugin
+  // initialization. A release APK must never depend on Firebase, secure
+  // storage, Hive, notifications, or network services to show its UI.
+  runApp(const CineVerseApp());
+
+  // Everything below is deliberately deferred until after runApp().
+  // A failed/slow plugin cannot block the first frame anymore.
+  unawaited(_initializeAfterFirstFrame());
+}
+
+Future<void> _initializeAfterFirstFrame() async {
+  // Firebase is optional for the initial UI. If it becomes available,
+  // the app can use it for auth/sync without delaying startup.
   try {
     await FirebaseBootstrap.initialize().timeout(const Duration(seconds: 5));
   } catch (_) {
     FirebaseBootstrap.configured = false;
   }
 
-  // API configuration is safe to time-box: compile-time dart-defines remain the
-  // fallback when secure storage is unavailable or slow.
   try {
     await ApiConfig.init().timeout(const Duration(seconds: 3));
   } catch (_) {}
 
-  // Always render the first frame before optional native services start.
-  runApp(const CineVerseApp());
-
-  unawaited(_initializeOptionalServices());
-}
-
-Future<void> _initializeOptionalServices() async {
   try {
     await CacheService.init().timeout(const Duration(seconds: 5));
   } catch (_) {}
