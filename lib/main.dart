@@ -39,10 +39,8 @@ Future<void> main() async {
       databaseFactory = databaseFactoryFfiWeb;
     }
 
-    // The first frame is always rendered before optional initialization.
     runApp(const CineVerseApp());
 
-    // Diagnostics and optional services never block startup.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(AppBootstrap.initAll());
     });
@@ -120,41 +118,62 @@ class CineVerseApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final providers = <ChangeNotifierProvider<dynamic>>[
-      ChangeNotifierProvider(create: (_) => ThemeProvider()),
-      ChangeNotifierProvider(create: (_) => SettingsProvider()),
-      ChangeNotifierProvider(create: (_) => MediaProvider()),
-      ChangeNotifierProvider(create: (_) => AiProvider()),
-    ];
+    // Keep providers explicitly typed and nested. This avoids any runtime
+    // ambiguity from a dynamically typed provider list during release builds.
+    Widget app = const _CineVerseMaterialApp();
+
+    app = ChangeNotifierProvider<AiProvider>(
+      create: (_) => AiProvider(),
+      child: app,
+    );
+    app = ChangeNotifierProvider<MediaProvider>(
+      create: (_) => MediaProvider(),
+      child: app,
+    );
 
     if (FirebaseBootstrap.configured) {
-      providers.add(
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
+      app = ChangeNotifierProvider<AuthProvider>(
+        create: (_) => AuthProvider(),
+        child: app,
       );
     }
 
-    return MultiProvider(
-      providers: providers,
-      child: Consumer2<ThemeProvider, SettingsProvider>(
-        builder: (context, tp, sp, _) {
-          return MaterialApp(
-            title: 'CineVerse',
-            debugShowCheckedModeBanner: false,
-            locale: sp.locale,
-            supportedLocales: AppTranslations.supportedLocales,
-            localizationsDelegates: const [
-              AppLocalizations.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            theme: AppTheme.build(Brightness.light, tp.effectiveSeed),
-            darkTheme: AppTheme.build(Brightness.dark, tp.effectiveSeed),
-            themeMode: sp.themeMode,
-            home: const HomeScreen(),
-          );
-        },
-      ),
+    app = ChangeNotifierProvider<SettingsProvider>(
+      create: (_) => SettingsProvider(),
+      child: app,
+    );
+    app = ChangeNotifierProvider<ThemeProvider>(
+      create: (_) => ThemeProvider(),
+      child: app,
+    );
+
+    return app;
+  }
+}
+
+class _CineVerseMaterialApp extends StatelessWidget {
+  const _CineVerseMaterialApp();
+
+  @override
+  Widget build(BuildContext context) {
+    final tp = context.watch<ThemeProvider>();
+    final sp = context.watch<SettingsProvider>();
+
+    return MaterialApp(
+      title: 'CineVerse',
+      debugShowCheckedModeBanner: false,
+      locale: sp.locale,
+      supportedLocales: AppTranslations.supportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      theme: AppTheme.build(Brightness.light, tp.effectiveSeed),
+      darkTheme: AppTheme.build(Brightness.dark, tp.effectiveSeed),
+      themeMode: sp.themeMode,
+      home: const HomeScreen(),
     );
   }
 }
