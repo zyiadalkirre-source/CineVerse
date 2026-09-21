@@ -46,10 +46,17 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
         onItemSelected: (selected) {
-          if (selected == 14) {
+          if (selected == 15) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            );
+            return;
+          }
+          if (selected == 14) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ClipsScreen()),
             );
             return;
           }
