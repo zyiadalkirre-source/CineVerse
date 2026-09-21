@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/constants.dart';
 import 'package:provider/provider.dart';
 import '../l10n/translations.dart';
 import '../models/media_item.dart';
@@ -145,7 +146,7 @@ class _LibraryState extends State<_Library> {
       final results = await Future.wait<List<MediaItem>>([
         provider.trending(lang),
         provider.topRated(lang),
-        provider.latestUpdates(lang, forceRefresh: forceRefresh),
+        provider.latestUpdates(lang: lang, forceRefresh: forceRefresh),
       ]);
 
       final seeds = provider.library.where((item) {
