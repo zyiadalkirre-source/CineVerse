@@ -156,6 +156,7 @@ class _StreamingFeaturesScreenState extends State<StreamingFeaturesScreen> {
       _showMessage('لا توجد أنواع مسجلة في مكتبتك بعد.');
       return;
     }
+    final sortedGenres = genres.toList()..sort((a, b) => a.compareTo(b));
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -165,18 +166,18 @@ class _StreamingFeaturesScreenState extends State<StreamingFeaturesScreen> {
           child: Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: genres.toList()
-              ..sort((a, b) => a.compareTo(b))
-              ..map(
-                (genre) => ActionChip(
-                  label: Text(genre),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    final matching = provider.library.where((x) => x.genres.contains(genre)).toList();
-                    _showPicker('أعمال: ' + genre, matching);
-                  },
-                ),
-              ).toList(),
+            children: sortedGenres
+                .map(
+                  (genre) => ActionChip(
+                    label: Text(genre),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      final matching = provider.library.where((x) => x.genres.contains(genre)).toList();
+                      _showPicker('أعمال: ' + genre, matching);
+                    },
+                  ),
+                )
+                .toList(),
           ),
         ),
       ),
