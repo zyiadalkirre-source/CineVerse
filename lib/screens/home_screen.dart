@@ -112,92 +112,467 @@ class _Library extends StatefulWidget {
   const _Library();
   @override State<_Library> createState()=>_LibraryState();
 }
+
 class _LibraryState extends State<_Library> {
-  String filter='all';
+  String filter = 'all';
   bool _showWelcomeBanner = true;
-  List<MediaItem> _filtered(List<MediaItem> items){
-    final r=items.where((x)=>filter=='movie'?x.mediaType=='movie':filter=='tv'?x.mediaType=='tv':filter=='favorite'?x.isFavorite:true).toList();
-    r.sort((a,b){if(a.lastWatchedSeconds>0&&b.lastWatchedSeconds==0)return -1;if(a.lastWatchedSeconds==0&&b.lastWatchedSeconds>0)return 1;return a.title.toLowerCase().compareTo(b.title.toLowerCase());});return r;
+  bool _loadingHome = true;
+  List<MediaItem> _trending = const [];
+  List<MediaItem> _topRated = const [];
+  List<MediaItem> _latest = const [];
+  List<MediaItem> _forYou = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadHome());
   }
-  Widget _chip(String label,String value)=>Padding(padding:const EdgeInsets.only(right:7),child:ChoiceChip(label:Text(label),selected:filter==value,onSelected:(_)=>setState(()=>filter=value)));
-  @override Widget build(BuildContext context) {
+
+  Future<void> _loadHome({bool forceRefresh = false}) async {
+    final provider = context.read<MediaProvider>();
+    final lang = context.read<SettingsProvider>().locale.languageCode;
+    if (mounted) setState(() => _loadingHome = true);
+
+    try {
+      final results = await Future.wait<List<MediaItem>>([
+        provider.trending(lang),
+        provider.topRated(lang),
+        provider.latestUpdates(lang, forceRefresh: forceRefresh),
+      ]);
+
+      final seeds = provider.library.where((item) {
+        return item.userTaste == 'love' ||
+            item.userTaste == 'like' ||
+            item.isFavorite ||
+            item.watchStatus == AppConstants.statusWatching;
+      }).take(2).toList();
+
+      final recommendationMap = <String, MediaItem>{};
+      for (final seed in seeds) {
+        try {
+          final recs = await provider.recommendations(seed, lang);
+          for (final rec in recs) {
+            final key = rec.mediaType + ':' + rec.id.toString();
+            if (rec.id != seed.id || rec.mediaType != seed.mediaType) {
+              recommendationMap[key] = rec;
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _trending = results[0];
+        _topRated = results[1];
+        _latest = results[2];
+        _forYou = recommendationMap.values.take(20).toList();
+        _loadingHome = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingHome = false);
+    }
+  }
+
+  List<MediaItem> _filtered(List<MediaItem> items) {
+    final r = items.where((x) {
+      if (filter == 'movie') return x.mediaType == 'movie';
+      if (filter == 'tv') return x.mediaType == 'tv';
+      if (filter == 'favorite') return x.isFavorite;
+      return true;
+    }).toList();
+
+    r.sort((a, b) {
+      if (a.lastWatchedSeconds > 0 && b.lastWatchedSeconds == 0) return -1;
+      if (a.lastWatchedSeconds == 0 && b.lastWatchedSeconds > 0) return 1;
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+    });
+    return r;
+  }
+
+  Widget _chip(String label, String value) => Padding(
+    padding: const EdgeInsets.only(right: 7),
+    child: ChoiceChip(
+      label: Text(label),
+      selected: filter == value,
+      onSelected: (_) => setState(() => filter = value),
+    ),
+  );
+
+  List<MediaItem> _topTen() {
+    final merged = <String, MediaItem>{};
+    for (final item in <MediaItem>[..._trending, ..._topRated, ..._latest]) {
+      merged[item.mediaType + ':' + item.id.toString()] = item;
+    }
+    final list = merged.values.toList()
+      ..sort((a, b) {
+        final aScore = a.voteAverage * 10 + a.voteCount / 1000;
+        final bScore = b.voteAverage * 10 + b.voteCount / 1000;
+        return bScore.compareTo(aScore);
+      });
+    return list.take(10).toList();
+  }
+
+  MediaItem? _heroItem() {
+    final watching = context.read<MediaProvider>().library
+        .where((x) => x.lastWatchedSeconds > 0 && x.backdropUrl != null)
+        .toList();
+    if (watching.isNotEmpty) return watching.first;
+
+    for (final item in _trending) {
+      if (item.backdropUrl != null) return item;
+    }
+    for (final item in _latest) {
+      if (item.backdropUrl != null) return item;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final provider = context.watch<MediaProvider>();
-    final theme = Theme.of(context);
     final filteredItems = _filtered(provider.library);
-    return CustomScrollView(slivers: [
-      if (_showWelcomeBanner)
-        SliverToBoxAdapter(child: Container(
-          margin: const EdgeInsets.fromLTRB(16, 12, 16, 18), padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [theme.colorScheme.primary, theme.colorScheme.secondary]),
-            boxShadow: [BoxShadow(color: theme.colorScheme.primary.withOpacity(.22), blurRadius: 24, offset: const Offset(0, 10))],
-          ),
-          child: Row(children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('عالمك السينمائي', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900, color: Colors.white)),
-              const SizedBox(height: 8),
-              Text(provider.library.isEmpty ? 'اكتشف، احفظ، وتابع كل ما تحب.' : provider.library.length.toString() + ' عمل محفوظ في مكتبتك', style: const TextStyle(color: Colors.white70, fontSize: 14)),
-              const SizedBox(height: 18),
-              FilledButton.tonalIcon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())), icon: const Icon(Icons.explore), label: const Text('اكتشف الآن')),
-            ])),
-            const SizedBox(width: 10),
-            Stack(children: [
-              const Icon(Icons.movie_filter_rounded, size: 82, color: Colors.white24),
-              Positioned(
-                top: 0, left: 0,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => setState(() => _showWelcomeBanner = false),
-                    borderRadius: BorderRadius.circular(20),
-                    child: const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Icon(Icons.close, color: Colors.white, size: 22),
+    final continueWatching = provider.library
+        .where((x) => x.lastWatchedSeconds > 0)
+        .toList()
+      ..sort((a, b) => b.lastWatchedSeconds.compareTo(a.lastWatchedSeconds));
+    final myList = provider.library
+        .where((x) => x.watchStatus == AppConstants.statusNotWatched)
+        .toList();
+    final topTen = _topTen();
+    final hero = _heroItem();
+
+    return RefreshIndicator(
+      onRefresh: () => _loadHome(forceRefresh: true),
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          if (hero != null)
+            SliverToBoxAdapter(child: _HeroBanner(item: hero))
+          else if (_showWelcomeBanner)
+            SliverToBoxAdapter(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Theme.of(context).colorScheme.primary,
+                      Theme.of(context).colorScheme.secondary,
+                    ],
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'عالمك السينمائي',
+                            style: TextStyle(
+                              fontSize: 25,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'اكتشف، احفظ، وتابع كل ما تحب.',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                          const SizedBox(height: 14),
+                          FilledButton.tonalIcon(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const SearchScreen()),
+                            ),
+                            icon: const Icon(Icons.search),
+                            label: const Text('ابدأ البحث'),
+                          ),
+                        ],
+                      ),
                     ),
+                    IconButton(
+                      onPressed: () => setState(() => _showWelcomeBanner = false),
+                      icon: const Icon(Icons.close, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          if (_loadingHome)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 18),
+                child: LinearProgressIndicator(),
+              ),
+            ),
+
+          if (continueWatching.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _HorizontalSection(
+                title: 'تابع المشاهدة',
+                icon: Icons.play_circle_fill,
+                items: continueWatching.take(15).toList(),
+                progressMode: true,
+              ),
+            ),
+
+          if (myList.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _HorizontalSection(
+                title: 'قائمتي',
+                icon: Icons.bookmark,
+                items: myList.take(15).toList(),
+              ),
+            ),
+
+          if (_forYou.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _HorizontalSection(
+                title: 'مختار لك',
+                icon: Icons.auto_awesome,
+                items: _forYou.take(15).toList(),
+              ),
+            ),
+
+          if (topTen.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _HorizontalSection(
+                title: 'أفضل 10 لدينا اليوم',
+                icon: Icons.emoji_events_outlined,
+                items: topTen,
+                ranked: true,
+              ),
+            ),
+
+          if (_trending.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _HorizontalSection(
+                title: 'الأكثر رواجاً الآن',
+                icon: Icons.local_fire_department_outlined,
+                items: _trending.take(20).toList(),
+              ),
+            ),
+
+          if (_latest.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _HorizontalSection(
+                title: 'جديد وساخن',
+                icon: Icons.new_releases_outlined,
+                items: _latest.take(20).toList(),
+              ),
+            ),
+
+          if (provider.library.isNotEmpty) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _chip('مكتبتي', 'all'),
+                      _chip('أفلام', 'movie'),
+                      _chip('مسلسلات', 'tv'),
+                      _chip('المفضلة', 'favorite'),
+                    ],
                   ),
                 ),
               ),
-            ]),
-          ]),
-        )),
-      if (provider.library.isNotEmpty) ...[
-        SliverToBoxAdapter(child: Padding(padding:const EdgeInsets.symmetric(horizontal:14,vertical:4),child:SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[_chip('الكل','all'),_chip('أفلام','movie'),_chip('مسلسلات','tv'),_chip('المفضلة','favorite')])))),
-        if(filter=='all'&&provider.library.any((x)=>x.lastWatchedSeconds>0))
-          SliverToBoxAdapter(child:_HorizontalSection(title:'تابع المشاهدة',icon:Icons.play_circle_fill,items:provider.library.where((x)=>x.lastWatchedSeconds>0).toList())),
-        if(filter=='all'&&provider.library.any((x)=>x.isFavorite))
-          SliverToBoxAdapter(child:_HorizontalSection(title:'المفضلة ❤️',icon:Icons.favorite,items:provider.library.where((x)=>x.isFavorite).toList())),
-        if(filter=='all'&&provider.library.any((x)=>x.watchStatus=='not_watched'))
-          SliverToBoxAdapter(child:_HorizontalSection(title:'قائمتي',icon:Icons.bookmark,items:provider.library.where((x)=>x.watchStatus=='not_watched').toList())),
-        SliverToBoxAdapter(child:_SectionHeader(title:filter=='all'?'كل مكتبتك':'نتائج الفلترة',icon:Icons.video_library)),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-          sliver: SliverGrid(
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: libraryGridColumnCount(MediaQuery.sizeOf(context).width),
-              childAspectRatio: 0.66,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 14,
             ),
-            delegate: SliverChildBuilderDelegate(
-              (_, i) => _DismissibleMediaCard(item: filteredItems[i]),
-              childCount: filteredItems.length,
+            SliverToBoxAdapter(
+              child: _SectionHeader(
+                title: filter == 'all' ? 'كل مكتبتك' : 'نتائج الفلترة',
+                icon: Icons.video_library,
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              sliver: SliverGrid(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: libraryGridColumnCount(MediaQuery.sizeOf(context).width),
+                  childAspectRatio: 0.66,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 14,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (_, i) => _DismissibleMediaCard(item: filteredItems[i]),
+                  childCount: filteredItems.length,
+                ),
+              ),
+            ),
+          ] else
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Text(
+                    'مكتبتك فاضية حالياً\nابحث عن فيلم أو مسلسل وأضفه هون.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 17),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroBanner extends StatelessWidget {
+  final MediaItem item;
+  const _HeroBanner({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      height: 430,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (item.backdropUrl != null)
+            Image.network(
+              item.backdropUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                color: theme.colorScheme.surfaceContainerHighest,
+              ),
+            )
+          else
+            Container(color: theme.colorScheme.surfaceContainerHighest),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.10),
+                  Colors.black.withValues(alpha: 0.35),
+                  Colors.black.withValues(alpha: 0.95),
+                ],
+              ),
             ),
           ),
-        ),
-      ] else const SliverFillRemaining(hasScrollBody: false, child: Center(child: Padding(padding: EdgeInsets.all(32), child: Text('مكتبتك فاضية حالياً\nابحث عن فيلم أو مسلسل وأضفه هون.', textAlign: TextAlign.center, style: TextStyle(fontSize: 17))))),
-    ]);
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 22,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '⭐ ' +
+                      item.voteAverage.toStringAsFixed(1) +
+                      '  •  ' +
+                      item.year +
+                      '  •  ' +
+                      (item.mediaType == 'tv'
+                          ? 'مسلسل'
+                          : item.mediaType == 'anime'
+                              ? 'أنمي'
+                              : 'فيلم'),
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                if (item.overview.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    item.overview,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white70, height: 1.25),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => DetailScreen(item: item)),
+                      ),
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('تشغيل'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => DetailScreen(item: item)),
+                      ),
+                      icon: const Icon(Icons.info_outline),
+                      label: const Text('المزيد'),
+                      style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
 class _HorizontalSection extends StatelessWidget {
-  final String title; final IconData icon; final List<MediaItem> items;
-  const _HorizontalSection({required this.title,required this.icon,required this.items});
-  @override Widget build(BuildContext context)=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    _SectionHeader(title:title,icon:icon),
-    SizedBox(height:220,child:ListView.separated(padding:const EdgeInsets.symmetric(horizontal:16),scrollDirection:Axis.horizontal,itemCount:items.length,separatorBuilder:(_,__)=>const SizedBox(width:12),itemBuilder:(_,i)=>SizedBox(width:125,child:_DismissibleMediaCard(item: items[i])))),
-    const SizedBox(height:8),
-  ]);
+  final String title;
+  final IconData icon;
+  final List<MediaItem> items;
+  final bool progressMode;
+  final bool ranked;
+
+  const _HorizontalSection({
+    required this.title,
+    required this.icon,
+    required this.items,
+    this.progressMode = false,
+    this.ranked = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _SectionHeader(title: title, icon: icon),
+      SizedBox(
+        height: ranked ? 245 : 232,
+        child: ListView.separated(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          scrollDirection: Axis.horizontal,
+          itemCount: items.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 12),
+          itemBuilder: (_, i) => SizedBox(
+            width: ranked ? 145 : 130,
+            child: _MediaCard(
+              items[i],
+              progressMode: progressMode,
+              rank: ranked ? i + 1 : null,
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 8),
+    ],
+  );
 }
 class _SectionHeader extends StatelessWidget {
   final String title; final IconData icon;
@@ -271,16 +646,74 @@ class _DismissibleMediaCard extends StatelessWidget {
 
 class _MediaCard extends StatelessWidget {
   final MediaItem item;
-  const _MediaCard(this.item);
+  final bool progressMode;
+  final int? rank;
+  const _MediaCard(this.item, {this.progressMode = false, this.rank});
   @override Widget build(BuildContext context) => InkWell(
     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DetailScreen(item: item))),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Expanded(child: Stack(children:[
-        ClipRRect(borderRadius:BorderRadius.circular(12),child:SizedBox(width:double.infinity,height:double.infinity,child:item.posterUrl==null?Container(color:Theme.of(context).colorScheme.surfaceContainerHighest,child:const Icon(Icons.movie)):Image.network(item.posterUrl!,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Center(child:Icon(Icons.broken_image))))),
-        if(item.isFavorite)const Positioned(top:7,right:7,child:CircleAvatar(radius:15,backgroundColor:Colors.black54,child:Icon(Icons.favorite,size:16,color:Colors.white))),
-        if(item.lastWatchedSeconds>0)const Positioned(left:7,bottom:7,child:Chip(label:Text('متابعة',style:TextStyle(fontSize:10)))),
-      ])),
-      const SizedBox(height: 5),
+      Expanded(
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: double.infinity,
+                height: double.infinity,
+                child: item.posterUrl == null
+                    ? Container(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        child: const Icon(Icons.movie),
+                      )
+                    : Image.network(
+                        item.posterUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Icon(Icons.broken_image),
+                        ),
+                      ),
+              ),
+            ),
+            if (rank != null)
+              Positioned(
+                left: 6,
+                bottom: 8,
+                child: Text(
+                  rank.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 42,
+                    fontWeight: FontWeight.w900,
+                    shadows: [Shadow(blurRadius: 8)],
+                  ),
+                ),
+              ),
+            if (item.isFavorite)
+              const Positioned(
+                top: 7,
+                right: 7,
+                child: CircleAvatar(
+                  radius: 15,
+                  backgroundColor: Colors.black54,
+                  child: Icon(Icons.favorite, size: 16, color: Colors.white),
+                ),
+              ),
+            if (progressMode && item.lastWatchedSeconds > 0)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: LinearProgressIndicator(
+                  minHeight: 5,
+                  value: item.runtime == null || item.runtime! <= 0
+                      ? 0.1
+                      : (item.lastWatchedSeconds / (item.runtime! * 60)).clamp(0.0, 1.0),
+                ),
+              ),
+          ],
+        ),
+      ),
+
       Text(
         item.title,
         maxLines: 2,
