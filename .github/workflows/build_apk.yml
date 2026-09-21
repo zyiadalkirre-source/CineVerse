@@ -29,233 +29,8 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Ensure Android platform exists
-        shell: bash
-        run: |
-          if [ ! -d "android" ]; then
-            flutter create . \
-              --platforms=android \
-              --project-name=cineverse \
-              --org=com.cineverse \
-              --no-pub
-          fi
-
-          rm -f test/widget_test.dart
-
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          root = Path("android")
-          build_gradle = next((p for p in [root / "build.gradle", root / "build.gradle.kts"] if p.exists()), root / "build.gradle")
-          settings_gradle = next((p for p in [root / "settings.gradle", root / "settings.gradle.kts"] if p.exists()), root / "settings.gradle")
-          app_gradle = next((p for p in [root / "app" / "build.gradle", root / "app" / "build.gradle.kts"] if p.exists()), root / "app" / "build.gradle")
-          wrapper_props = root / "gradle" / "wrapper" / "gradle-wrapper.properties"
-
-          kotlin_version = "2.3.21"
-          agp_version = "8.11.1"
-          gradle_version = "8.14"
-
-          if build_gradle.exists():
-              text = build_gradle.read_text()
-              text = text.replace("com.android.tools.build:gradle:7.3.0", f"com.android.tools.build:gradle:{agp_version}")
-              text = text.replace("com.android.tools.build:gradle:7.4.2", f"com.android.tools.build:gradle:{agp_version}")
-              build_gradle.write_text(text)
-
-          if settings_gradle.exists():
-              text = settings_gradle.read_text()
-
-              text = re.sub(
-                  r'id\("com\.android\.application"\)\s+version\s+"[^"]+"',
-                  f'id("com.android.application") version "{agp_version}"',
-                  text,
-              )
-              text = re.sub(
-                  r'id\("org\.jetbrains\.kotlin\.android"\)\s+version\s+"[^"]+"',
-                  f'id("org.jetbrains.kotlin.android") version "{kotlin_version}"',
-                  text,
-              )
-
-              if 'com.google.gms.google-services' not in text:
-                  text = text.replace(
-                      'plugins {',
-                      'plugins {\n    id("com.google.gms.google-services") version "4.4.4" apply false',
-                      1,
-                  )
-              settings_gradle.write_text(text)
-
-          if wrapper_props.exists():
-              text = wrapper_props.read_text()
-              text = re.sub(
-                  r"distributionUrl=.*",
-                  f"distributionUrl=https\\://services.gradle.org/distributions/gradle-{gradle_version}-all.zip",
-                  text,
-              )
-              wrapper_props.write_text(text)
-
-          for path in (settings_gradle, build_gradle):
-              if path.exists():
-                  text = path.read_text()
-                  for old in ("1.7.10", "1.8.22", "2.1.0", "2.2.20"):
-                      text = text.replace(f'"{old}"', f'"{kotlin_version}"')
-                      text = text.replace(f"'{old}'", f"'{kotlin_version}'")
-                  path.write_text(text)
-
-          if app_gradle.exists():
-              text = app_gradle.read_text()
-              if app_gradle.suffix == ".kts":
-                  text = text.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
-                  text = text.replace("minSdk = flutter.minSdkVersion", "minSdk = 24")
-                  text = text.replace("targetSdk = flutter.targetSdkVersion", "targetSdk = 36")
-                  text = text.replace("ndkVersion = flutter.ndkVersion", 'ndkVersion = "27.0.12077973"')
-                  text = text.replace("sourceCompatibility = JavaVersion.VERSION_11", "sourceCompatibility = JavaVersion.VERSION_17")
-                  text = text.replace("targetCompatibility = JavaVersion.VERSION_11", "targetCompatibility = JavaVersion.VERSION_17")
-                  text = text.replace("jvmTarget = JavaVersion.VERSION_11.toString()", "jvmTarget = JavaVersion.VERSION_17.toString()")
-                  if "isCoreLibraryDesugaringEnabled = true" not in text:
-                      text = text.replace("compileOptions {", "compileOptions {\n        isCoreLibraryDesugaringEnabled = true", 1)
-                  if "com.android.tools:desugar_jdk_libs:" not in text:
-                      if "dependencies {" in text:
-                          text = text.replace(
-                              "dependencies {",
-                              "dependencies {\n    coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")",
-                              1,
-                          )
-                      else:
-                          text += """
-
-          dependencies {
-              coreLibraryDesugaring(\"com.android.tools:desugar_jdk_libs:2.1.4\")
-          }
-          """
-              else:
-                  text = text.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
-                  text = text.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 24")
-                  text = text.replace("targetSdkVersion flutter.targetSdkVersion", "targetSdkVersion 36")
-                  text = text.replace("ndkVersion flutter.ndkVersion", 'ndkVersion "27.0.12077973"')
-                  if "coreLibraryDesugaringEnabled true" not in text and "isCoreLibraryDesugaringEnabled = true" not in text:
-                      if "android {" in text:
-                          text = text.replace("android {", """android {
-              compileOptions {
-                  coreLibraryDesugaringEnabled true
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }""", 1)
-                  else:
-                      raise SystemExit("android/app/build.gradle has no android block")
-                  if "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:" not in text:
-                      if "dependencies {" in text:
-                          text = text.replace("dependencies {", "dependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'", 1)
-
-              if app_gradle.suffix == ".kts":
-                  text = re.sub(r"\n\s*kotlinOptions\s*\{.*?\n\s*\}", "", text, flags=re.S)
-                  if "import org.jetbrains.kotlin.gradle.dsl.JvmTarget" not in text:
-                      text = "import org.jetbrains.kotlin.gradle.dsl.JvmTarget\n\n" + text
-                  if "compilerOptions" not in text:
-                      text = text.replace("android {", """kotlin {
-              compilerOptions {
-                  jvmTarget.set(JvmTarget.JVM_17)
-              }
-          }
-
-          android {""", 1)
-              else:
-                  text += f"""
-          android {{
-              ndkVersion "27.0.12077973"
-              compileOptions {{
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }}
-              kotlinOptions {{
-                  jvmTarget = "17"
-              }}
-          }}
-          """
-              app_gradle.write_text(text)
-
-          # Flutter can store the Kotlin plugin version in settings.gradle(.kts)
-          # or gradle/libs.versions.toml. Patch all Gradle/Kotlin version files.
-          for path in root.rglob("*"):
-              if not path.is_file() or path.suffix not in {".gradle", ".kts", ".toml"}:
-                  continue
-              try:
-                  text = path.read_text()
-              except UnicodeDecodeError:
-                  continue
-              for old_version in ("1.7.10", "1.8.22", "2.1.0", "2.2.20"):
-                  text = text.replace(old_version, kotlin_version)
-              text = text.replace("com.android.tools.build:gradle:7.3.0", f"com.android.tools.build:gradle:{agp_version}")
-              text = text.replace("com.android.tools.build:gradle:7.4.2", f"com.android.tools.build:gradle:{agp_version}")
-              path.write_text(text)
-
-          combined = ""
-          for path in root.rglob("*"):
-              if path.is_file() and path.suffix in {".gradle", ".kts", ".toml"}:
-                  try:
-                      combined += path.read_text() + "\n"
-                  except UnicodeDecodeError:
-                      pass
-
-          if kotlin_version not in combined:
-              raise SystemExit("Kotlin 2.3.21 was not applied to the Android project")
-
-          agp_applied = (
-              f"com.android.tools.build:gradle:{agp_version}" in combined
-              or re.search(r'id\("com\.android\.application"\)\s+version\s+"' + re.escape(agp_version) + r'"', combined)
-              or re.search(r'id\("com\.android\.application"\)\s+version\s+\'' + re.escape(agp_version) + r"\'", combined)
-          )
-          if not agp_applied:
-              print("===== DEBUG: generated Gradle files after patch =====")
-              for path in (settings_gradle, build_gradle, app_gradle):
-                  if path.exists():
-                      print(f"===== {path} =====")
-                      print(path.read_text())
-              raise SystemExit(f"AGP {agp_version} was not applied to the Android project")
-
-          print("Android Gradle project prepared with Kotlin", kotlin_version, "and AGP", agp_version)
-          PY
-
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          manifest = Path("android/app/src/main/AndroidManifest.xml")
-          text = manifest.read_text() if manifest.exists() else ""
-          permission = '<uses-permission android:name="android.permission.INTERNET"/>'
-
-          if not manifest.exists():
-              raise SystemExit("android/app/src/main/AndroidManifest.xml was not generated")
-
-          if permission not in text:
-              match = re.search(r"<manifest\b[^>]*>", text, flags=re.S)
-              if not match:
-                  raise SystemExit("Unable to locate the opening <manifest> tag")
-              opening_tag = match.group(0)
-              replacement = opening_tag + "\\n    " + permission
-              text = text[:match.start()] + replacement + text[match.end():]
-              manifest.write_text(text)
-
-          print("Android INTERNET permission ensured")
-          PY
-
-          python3 - <<'PY'
-          from pathlib import Path
-          props = Path("android/gradle.properties")
-          existing = props.read_text() if props.exists() else ""
-          lines = [line for line in existing.splitlines()
-                   if not line.startswith("android.useAndroidX=")
-                   and not line.startswith("android.enableJetifier=")]
-          lines.extend(["android.useAndroidX=true", "android.enableJetifier=false"])
-          props.write_text("\n".join(lines) + "\n")
-          print("AndroidX enabled; Jetifier disabled")
-          PY
-
-          echo "===== Android Gradle configuration ====="
-          for f in android/settings.gradle android/settings.gradle.kts; do [ -f "$f" ] && sed -n "1,240p" "$f"; done
-          for f in android/build.gradle android/build.gradle.kts; do [ -f "$f" ] && sed -n "1,240p" "$f"; done
-          for f in android/app/build.gradle android/app/build.gradle.kts; do [ -f "$f" ] && sed -n "1,300p" "$f"; done
-          echo "===== Gradle wrapper ====="
-          grep -n "distributionUrl" android/gradle/wrapper/gradle-wrapper.properties
+      - name: Get Flutter dependencies
+        run: flutter pub get
 
       - name: Inject google-services.json
         shell: bash
@@ -264,6 +39,8 @@ jobs:
           FIREBASE_ANDROID_CONFIG_JSON: ${{ secrets.FIREBASE_ANDROID_CONFIG_JSON }}
         run: |
           set -euo pipefail
+
+          mkdir -p android/app
 
           if [ -n "${GOOGLE_SERVICES_JSON:-}" ]; then
             if printf '%s' "$GOOGLE_SERVICES_JSON" | base64 --decode > android/app/google-services.json 2>/dev/null               && python3 -m json.tool android/app/google-services.json >/dev/null 2>&1; then
@@ -281,7 +58,7 @@ jobs:
             echo "GOOGLE_SERVICES_JSON is not configured; Firebase Android file injection skipped."
           fi
 
-      - name: Apply Google Services Gradle plugin
+      - name: Configure Google Services plugin
         shell: bash
         run: |
           set -euo pipefail
@@ -291,38 +68,43 @@ jobs:
             exit 0
           fi
 
-          if [ -f android/app/build.gradle.kts ]; then
-            python3 - <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
-          p = Path("android/app/build.gradle.kts")
-          t = p.read_text()
-          marker = 'apply(plugin = "com.google.gms.google-services")'
-          if marker not in t:
-              t += f'\n{marker}\n'
-              p.write_text(t)
-          PY
-          elif [ -f android/app/build.gradle ]; then
-            python3 - <<'PY'
-          from pathlib import Path
-          p = Path("android/app/build.gradle")
-          t = p.read_text()
-          marker = "apply plugin: 'com.google.gms.google-services'"
-          if marker not in t:
-              t += f"\n{marker}\n"
-              p.write_text(t)
-          PY
-          else
-            echo "Android app Gradle file not found." >&2
-            exit 1
-          fi
 
-          echo "Google Services Gradle plugin enabled."
+          settings = Path("android/settings.gradle.kts")
+          app = Path("android/app/build.gradle.kts")
+
+          if not settings.exists() or not app.exists():
+              raise SystemExit("Expected Kotlin DSL Android scaffold files are missing")
+
+          text = settings.read_text()
+          plugin_line = '    id("com.google.gms.google-services") version "4.4.4" apply false'
+          if plugin_line not in text:
+              marker = 'plugins {'
+              if marker not in text:
+                  raise SystemExit("Unable to locate plugins block in android/settings.gradle.kts")
+              text = text.replace(marker, marker + "\n" + plugin_line, 1)
+              settings.write_text(text)
+
+          text = app.read_text()
+          app_plugin = '    id("com.google.gms.google-services")'
+          if app_plugin not in text:
+              marker = '    id("dev.flutter.flutter-gradle-plugin")'
+              if marker not in text:
+                  raise SystemExit("Unable to locate Flutter Gradle plugin in android/app/build.gradle.kts")
+              text = text.replace(marker, marker + "\n" + app_plugin, 1)
+              app.write_text(text)
+
+          print("Google Services Gradle plugin configured.")
+          PY
+
       - name: Verify Firebase Android configuration
         shell: bash
         env:
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
         run: |
           set -euo pipefail
+
           if [ ! -f android/app/google-services.json ]; then
             echo "google-services.json is missing for the Android build."
             exit 1
@@ -330,43 +112,40 @@ jobs:
 
           python3 - <<'PY'
           import json
+          import os
           import re
           from pathlib import Path
 
           path = Path("android/app/google-services.json")
           data = json.loads(path.read_text())
+
           project = data.get("project_info", {})
           clients = data.get("client", [])
+
           if not project.get("project_id"):
               raise SystemExit("Firebase project_id is missing from google-services.json")
           if not clients:
               raise SystemExit("No Android client exists in google-services.json")
 
           android_packages = []
-          oauth_clients = 0
+          oauth_client_types = []
+
           for client in clients:
               android = client.get("client_info", {}).get("android_client_info", {})
               package_name = android.get("package_name")
               if package_name:
                   android_packages.append(package_name)
-              oauth_clients += len(
-                  client.get("oauth_client", [])
-              )
+
+              for entry in client.get("oauth_client", []):
+                  oauth_client_types.append(str(entry.get("client_type")))
 
           if not android_packages:
               raise SystemExit("No Android package configuration exists in google-services.json")
 
-          application_id = None
-          for gradle_path in (
-              Path("android/app/build.gradle.kts"),
-              Path("android/app/build.gradle"),
-          ):
-              if gradle_path.exists():
-                  gradle_text = gradle_path.read_text()
-                  match = re.search(r'applicationId\s*[=]?\s*["\']([^"\']+)["\']', gradle_text)
-                  if match:
-                      application_id = match.group(1)
-                      break
+          app_gradle = Path("android/app/build.gradle.kts")
+          gradle_text = app_gradle.read_text()
+          match = re.search(r'applicationId\s*=\s*"([^"]+)"', gradle_text)
+          application_id = match.group(1) if match else None
 
           if application_id and application_id not in android_packages:
               raise SystemExit(
@@ -375,120 +154,22 @@ jobs:
                   + ". Add that exact Android package to Firebase and download a new google-services.json."
               )
 
-          oauth_client_types = []
-          has_web_oauth_client = False
-          for client in clients:
-              entries = client.get("oauth_client", [])
-              oauth_client_types.extend(str(entry.get("client_type")) for entry in entries)
-              has_web_oauth_client = has_web_oauth_client or any(
-                  str(entry.get("client_type")) == "3" for entry in entries
-              )
+          has_web_oauth_client = "3" in oauth_client_types
+          explicit_web_client_id = os.environ.get("GOOGLE_WEB_CLIENT_ID", "").strip()
 
-          explicit_web_client_id = __import__("os").environ.get("GOOGLE_WEB_CLIENT_ID", "").strip()
           if not has_web_oauth_client and not explicit_web_client_id:
               raise SystemExit(
                   "Google Sign-In is not fully configured: google-services.json has no "
-                  "Web OAuth client (client_type=3), and GOOGLE_WEB_CLIENT_ID is not set. "
-                  "Enable Google Sign-In in Firebase and download a fresh google-services.json, "
-                  "or provide the Web OAuth client ID via the GOOGLE_WEB_CLIENT_ID secret."
+                  "Web OAuth client (client_type=3), and GOOGLE_WEB_CLIENT_ID is not set."
               )
 
           if explicit_web_client_id and not explicit_web_client_id.endswith(".apps.googleusercontent.com"):
               raise SystemExit("GOOGLE_WEB_CLIENT_ID does not look like a Google OAuth client ID")
 
           print("Firebase Android configuration is structurally valid.")
-          print("OAuth client types found:", ", ".join(sorted(set(oauth_client_types))) if oauth_client_types else "none")
           print("Configured Android package(s):", ", ".join(android_packages))
-          print("OAuth client entries:", oauth_clients)
-          print("Web OAuth fallback configured:", "yes" if explicit_web_client_id else "no (google-services.json)")
-          PY
-
-      - name: Install Android SDK 36
-        shell: bash
-        run: |
-          set -euo pipefail
-          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Android/Sdk}}"
-          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager -print -quit 2>/dev/null || true)"
-          fi
-          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
-            echo "Android sdkmanager was not found under $SDK_ROOT/cmdline-tools" >&2
-            find "$SDK_ROOT" -maxdepth 4 -type f -name sdkmanager -print 2>/dev/null || true
-            exit 127
-          fi
-          set +o pipefail
-          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" "platforms;android-36" "ndk;27.0.12077973"
-          SDKMANAGER_STATUS=${PIPESTATUS[1]}
-          set -o pipefail
-          if [ "$SDKMANAGER_STATUS" -ne 0 ]; then
-            echo "sdkmanager failed with exit code $SDKMANAGER_STATUS" >&2
-            exit "$SDKMANAGER_STATUS"
-          fi
-          "$SDKMANAGER" --sdk_root="$SDK_ROOT" --list_installed | grep -E "platforms;android-36" || true
-
-      - name: Set up Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: gradle
-
-      - name: Verify Flutter
-        run: flutter --version
-
-      - name: Get Flutter dependencies
-        run: flutter pub get
-
-      - name: Patch legacy speech_to_text Android build config
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import glob
-          matches = glob.glob('/home/runner/.pub-cache/hosted/pub.dev/speech_to_text-7.2.0/android/build.gradle')
-          if not matches:
-              raise SystemExit('speech_to_text 7.2.0 Android build.gradle was not found')
-          path = Path(matches[0])
-          text = path.read_text()
-          replacements = {
-              'compileSdkVersion flutter.compileSdkVersion': 'compileSdkVersion 36',
-              'compileSdk = flutter.compileSdkVersion': 'compileSdk = 36',
-              'minSdkVersion flutter.minSdkVersion': 'minSdkVersion 24',
-              'minSdk = flutter.minSdkVersion': 'minSdk = 24',
-              'targetSdkVersion flutter.targetSdkVersion': 'targetSdkVersion 36',
-              'targetSdk = flutter.targetSdkVersion': 'targetSdk = 36',
-              'ndkVersion = flutter.ndkVersion': '',
-          }
-          for old, new in replacements.items():
-              text = text.replace(old, new)
-          path.write_text(text)
-          remaining = [token for token in replacements if token in text]
-          if remaining:
-              raise SystemExit('Unpatched speech_to_text Flutter Gradle references: ' + ', '.join(remaining))
-          print('Patched', path)
-          PY
-
-      - name: Align LiteRT-LM Android Gradle toolchain
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import glob
-          kotlin_version = "2.3.21"
-          agp_version = "8.11.1"
-          matches = glob.glob('/home/runner/.pub-cache/hosted/pub.dev/flutter_litert_lm-0.3.0/android/build.gradle.kts')
-          if not matches:
-              raise SystemExit('flutter_litert_lm 0.3.0 Android build.gradle.kts was not found')
-          path = Path(matches[0])
-          text = path.read_text()
-          text = text.replace('val kotlinVersion = "2.2.20"', f'val kotlinVersion = "{kotlin_version}"')
-          text = text.replace('classpath("com.android.tools.build:gradle:8.11.1")', f'classpath("com.android.tools.build:gradle:{agp_version}")')
-          path.write_text(text)
-          verify = path.read_text()
-          if kotlin_version not in verify or agp_version not in verify:
-              raise SystemExit('LiteRT-LM Gradle toolchain was not patched correctly')
-          print('Patched', path, 'to Kotlin', kotlin_version, 'and AGP', agp_version)
+          print("OAuth client types:", ", ".join(sorted(set(oauth_client_types))) if oauth_client_types else "none")
+          print("Web OAuth fallback:", "yes" if explicit_web_client_id else "from google-services.json")
           PY
 
       - name: Analyze Dart code
@@ -500,17 +181,7 @@ jobs:
       - name: Build release APK
         shell: bash
         run: |
-          flutter build apk --release \
-            --dart-define=TMDB_API_KEY="${{ secrets.TMDB_API_KEY }}" \
-            --dart-define=GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
-            --dart-define=FIREBASE_API_KEY="${{ secrets.FIREBASE_API_KEY }}" \
-            --dart-define=FIREBASE_APP_ID="${{ secrets.FIREBASE_APP_ID }}" \
-            --dart-define=FIREBASE_MESSAGING_SENDER_ID="${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}" \
-            --dart-define=FIREBASE_PROJECT_ID="${{ secrets.FIREBASE_PROJECT_ID }}" \
-            --dart-define=FIREBASE_AUTH_DOMAIN="${{ secrets.FIREBASE_AUTH_DOMAIN }}" \
-            --dart-define=FIREBASE_STORAGE_BUCKET="${{ secrets.FIREBASE_STORAGE_BUCKET }}" \
-            --dart-define=GOOGLE_WEB_CLIENT_ID="${{ secrets.GOOGLE_WEB_CLIENT_ID }}" \
-            --dart-define=VIDEO_SOURCE_BASE_URL="${{ secrets.VIDEO_SOURCE_BASE_URL }}"
+          flutter build apk --release             --dart-define=TMDB_API_KEY="${{ secrets.TMDB_API_KEY }}"             --dart-define=GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"             --dart-define=FIREBASE_API_KEY="${{ secrets.FIREBASE_API_KEY }}"             --dart-define=FIREBASE_APP_ID="${{ secrets.FIREBASE_APP_ID }}"             --dart-define=FIREBASE_MESSAGING_SENDER_ID="${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}"             --dart-define=FIREBASE_PROJECT_ID="${{ secrets.FIREBASE_PROJECT_ID }}"             --dart-define=FIREBASE_AUTH_DOMAIN="${{ secrets.FIREBASE_AUTH_DOMAIN }}"             --dart-define=FIREBASE_STORAGE_BUCKET="${{ secrets.FIREBASE_STORAGE_BUCKET }}"             --dart-define=GOOGLE_WEB_CLIENT_ID="${{ secrets.GOOGLE_WEB_CLIENT_ID }}"             --dart-define=VIDEO_SOURCE_BASE_URL="${{ secrets.VIDEO_SOURCE_BASE_URL }}"
 
       - name: Verify APK exists
         shell: bash
@@ -532,5 +203,3 @@ jobs:
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
-
-# Firebase secret configured; this workflow runs on push and manual dispatch.
