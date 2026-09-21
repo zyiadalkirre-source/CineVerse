@@ -9,6 +9,7 @@
 
 
 
+
 # Flutter repo-specific
 /bin/cache/
 /bin/internal/bootstrap.bat
@@ -17,7 +18,6 @@
 /dev/benchmarks/mega_gallery/
 /dev/bots/.recipe_deps
 /dev/bots/android_tools/
-/dev/ci/**/Gemfile.lock
 /dev/devicelab/ABresults*.json
 /dev/docs/doc/
 /dev/docs/flutter.docs.zip
@@ -27,7 +27,6 @@
 /dev/integration_tests/**/Pods
 /packages/flutter/coverage/
 version
-analysis_benchmark.json
 analysis_benchmark.json
 
 # packages file containing multi-root paths
