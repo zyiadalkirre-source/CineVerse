@@ -15,6 +15,7 @@ import 'providers/ai_provider.dart';
 import 'providers/auth_provider.dart';
 import 'screens/home_screen.dart';
 import 'core/firebase_bootstrap.dart';
+import 'services/auth_service.dart';
 import 'core/app_bootstrap.dart';
 
 Future<void> main() async {
@@ -37,6 +38,13 @@ Future<void> main() async {
 
     if (kIsWeb) {
       databaseFactory = databaseFactoryFfiWeb;
+    }
+
+    // Firebase/Auth must be ready BEFORE the provider tree is built.
+    // Otherwise AuthProvider is omitted and the UI can start in an invalid state.
+    await FirebaseBootstrap.initialize().timeout(const Duration(seconds: 8));
+    if (FirebaseBootstrap.configured) {
+      await AuthService.instance.initialize().timeout(const Duration(seconds: 8));
     }
 
     runApp(const CineVerseApp());
