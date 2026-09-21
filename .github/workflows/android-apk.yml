@@ -26,6 +26,9 @@ jobs:
       - name: Flutter version
         run: flutter --version
 
+      - name: Generate Android platform files if missing
+        run: flutter create --platforms=android --project-name cineverse .
+
       - name: Get dependencies
         run: flutter pub get
 
