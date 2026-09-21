@@ -14,6 +14,7 @@ import 'stats_screen.dart';
 import 'settings_screen.dart';
 import 'clips_screen.dart';
 import 'my_cineverse_screen.dart';
+import 'downloads_screen.dart';
 import 'drawer_section_screen.dart';
 import 'notifications_screen.dart';
 import 'latest_updates_screen.dart';
@@ -66,6 +67,13 @@ class _HomeScreenState extends State<HomeScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const ClipsScreen()),
+            );
+            return;
+          }
+          if (selected == 10) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const DownloadsScreen()),
             );
             return;
           }
