@@ -37,6 +37,7 @@ class CustomDrawer extends StatelessWidget {
     (icon: Icons.video_library_rounded, title: 'Clips'),
     (icon: Icons.person_rounded, title: 'My CineVerse'),
     (icon: Icons.settings_rounded, title: 'الإعدادات'),
+    (icon: Icons.auto_awesome_motion_rounded, title: 'مركز ميزات المشاهدة'),
   ];
 
   @override
