@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 
-import '../services/auth_service.dart';
+import '../providers/auth_provider.dart';
 import '../services/cloud_sync_service.dart';
-import '../core/firebase_bootstrap.dart';
 import '../providers/media_provider.dart';
 
 class AccountScreen extends StatefulWidget {
@@ -20,22 +19,20 @@ class _AccountScreenState extends State<AccountScreen> {
   DateTime? lastSync;
 
   Future<void> _google() async {
+    final auth = context.read<AuthProvider>();
+
     setState(() {
       loading = true;
       error = null;
     });
 
-    try {
-      await AuthService.instance.signInWithGoogle();
-      if (mounted) setState(() {});
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          error = e.toString().replaceFirst('Exception: ', '');
-        });
-      }
-    } finally {
-      if (mounted) setState(() => loading = false);
+    await auth.signInWithGoogle();
+
+    if (mounted) {
+      setState(() {
+        error = auth.errorMessage;
+        loading = false;
+      });
     }
   }
 
@@ -67,16 +64,16 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _signOut() async {
+    final auth = context.read<AuthProvider>();
+
     setState(() => loading = true);
-    try {
-      await AuthService.instance.signOut();
-    } finally {
-      if (mounted) {
-        setState(() {
-          loading = false;
-          error = null;
-        });
-      }
+    await auth.signOut();
+
+    if (mounted) {
+      setState(() {
+        loading = false;
+        error = auth.errorMessage;
+      });
     }
   }
 
@@ -105,22 +102,22 @@ class _AccountScreenState extends State<AccountScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MediaProvider>();
+    final auth = context.watch<AuthProvider>();
 
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: StreamBuilder<User?>(
-        stream: AuthService.instance.authStateChanges,
-        builder: (context, snapshot) {
-          final user = snapshot.data ?? FirebaseAuth.instance.currentUser;
+      child: Builder(
+        builder: (context) {
+          final user = auth.currentUser;
 
-          if (!FirebaseBootstrap.configured) {
+          if (!auth.firebaseReady) {
             return Scaffold(
               appBar: AppBar(title: const Text('حساب CineVerse')),
-              body: const Center(
+              body: Center(
                 child: Padding(
-                  padding: EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(24),
                   child: Text(
-                    'تم تجهيز Google Sign-In والمزامنة، لكن إعداد Firebase الخاص بالتطبيق غير متاح في هذه النسخة.',
+                    'تسجيل الدخول والمزامنة غير متاحين حالياً. يمكنك استخدام التطبيق محلياً.',
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -130,14 +127,16 @@ class _AccountScreenState extends State<AccountScreen> {
 
           return Scaffold(
             appBar: AppBar(title: const Text('حساب CineVerse')),
-            body: user == null ? _signInBody() : _accountBody(user, provider),
+            body: user == null
+                ? _signInBody(auth)
+                : _accountBody(user, provider),
           );
         },
       ),
     );
   }
 
-  Widget _signInBody() {
+  Widget _signInBody(AuthProvider auth) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
@@ -163,16 +162,16 @@ class _AccountScreenState extends State<AccountScreen> {
               ),
               const SizedBox(height: 24),
               FilledButton.icon(
-                onPressed: loading ? null : _google,
+                onPressed: loading || auth.isLoading ? null : _google,
                 icon: const Icon(Icons.login),
                 label: Text(
-                  loading ? 'جاري تسجيل الدخول...' : 'المتابعة باستخدام Google',
+                  loading || auth.isLoading ? 'جاري تسجيل الدخول...' : 'المتابعة باستخدام Google',
                 ),
               ),
-              if (error != null) ...[
+              if (error != null || auth.errorMessage != null) ...[
                 const SizedBox(height: 16),
                 Text(
-                  error!,
+                  error ?? auth.errorMessage!,
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
