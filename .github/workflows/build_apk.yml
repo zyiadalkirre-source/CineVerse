@@ -157,19 +157,20 @@ jobs:
           has_web_oauth_client = "3" in oauth_client_types
           explicit_web_client_id = os.environ.get("GOOGLE_WEB_CLIENT_ID", "").strip()
 
-          if not has_web_oauth_client and not explicit_web_client_id:
-              raise SystemExit(
-                  "Google Sign-In is not fully configured: google-services.json has no "
-                  "Web OAuth client (client_type=3), and GOOGLE_WEB_CLIENT_ID is not set."
-              )
-
           if explicit_web_client_id and not explicit_web_client_id.endswith(".apps.googleusercontent.com"):
               raise SystemExit("GOOGLE_WEB_CLIENT_ID does not look like a Google OAuth client ID")
 
           print("Firebase Android configuration is structurally valid.")
           print("Configured Android package(s):", ", ".join(android_packages))
           print("OAuth client types:", ", ".join(sorted(set(oauth_client_types))) if oauth_client_types else "none")
-          print("Web OAuth fallback:", "yes" if explicit_web_client_id else "from google-services.json")
+
+          if has_web_oauth_client:
+              print("Web OAuth client: present in google-services.json")
+          elif explicit_web_client_id:
+              print("Web OAuth client: provided by GOOGLE_WEB_CLIENT_ID secret")
+          else:
+              print("WARNING: Web OAuth client is not configured yet. Build will continue so the APK signing SHA-1/SHA-256 can be extracted.")
+              print("After adding the SHA fingerprints in Firebase, download a fresh google-services.json (or set GOOGLE_WEB_CLIENT_ID).")
           PY
 
       - name: Analyze Dart code
