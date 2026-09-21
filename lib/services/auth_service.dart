@@ -29,6 +29,11 @@ class AuthService implements AuthClient {
   FirebaseAuth get _auth => FirebaseAuth.instance;
   GoogleSignIn get _google => GoogleSignIn.instance;
 
+  // Used when google-services.json has no Web OAuth client (client_type=3).
+  // The CI workflow injects this value through --dart-define.
+  static const _googleServerClientId =
+      String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
+
   bool _initialized = false;
   Future<void>? _initialization;
 
@@ -61,7 +66,13 @@ class AuthService implements AuthClient {
     if (!isReady || _initialized) return;
 
     if (!kIsWeb) {
-      await _google.initialize();
+      if (_googleServerClientId.isNotEmpty) {
+        await _google.initialize(serverClientId: _googleServerClientId);
+        debugPrint('✅ Google Sign-In initialized with explicit server client ID');
+      } else {
+        await _google.initialize();
+        debugPrint('ℹ️ Google Sign-In using google-services.json client configuration');
+      }
     }
 
     _initialized = true;
