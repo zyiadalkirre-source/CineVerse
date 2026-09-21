@@ -32,23 +32,54 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Patch flutter_inappwebview for AGP 9
+      - name: Patch Android plugin compatibility
         shell: bash
         run: |
           set -euo pipefail
 
-          package_gradle="$(find "$PUB_CACHE/hosted/pub.dev" -path '*/flutter_inappwebview_android-*/android/build.gradle' -print -quit)"
-          if [ -z "$package_gradle" ]; then
+          inappwebview_gradle="$(find "$PUB_CACHE/hosted/pub.dev" -path '*/flutter_inappwebview_android-*/android/build.gradle' -print -quit)"
+          if [ -z "$inappwebview_gradle" ]; then
             echo "flutter_inappwebview_android Android Gradle file was not found."
             exit 1
           fi
 
-          if grep -q "getDefaultProguardFile('proguard-android.txt')" "$package_gradle"; then
-            sed -i "s/getDefaultProguardFile('proguard-android.txt')/getDefaultProguardFile('proguard-android-optimize.txt')/g" "$package_gradle"
+          if grep -q "getDefaultProguardFile('proguard-android.txt')" "$inappwebview_gradle"; then
+            sed -i "s/getDefaultProguardFile('proguard-android.txt')/getDefaultProguardFile('proguard-android-optimize.txt')/g" "$inappwebview_gradle"
             echo "Patched flutter_inappwebview_android for AGP 9 compatibility."
           else
-            echo "No legacy proguard-android.txt reference found; leaving dependency unchanged."
+            echo "No legacy proguard-android.txt reference found; leaving InAppWebView unchanged."
           fi
+
+          file_picker_gradle="$(find "$PUB_CACHE/hosted/pub.dev" -path '*/file_picker-*/android/build.gradle' -print -quit)"
+          if [ -z "$file_picker_gradle" ]; then
+            echo "file_picker Android Gradle file was not found."
+            exit 1
+          fi
+
+          python3 - "$file_picker_gradle" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          text = path.read_text()
+
+          updated = re.sub(r'compileSdkVersion\s+34\b', 'compileSdkVersion 36', text)
+          updated = re.sub(r'compileSdk\s+34\b', 'compileSdk 36', updated)
+
+          if updated == text:
+              print("No hard-coded file_picker compileSdk 34 found; leaving file_picker unchanged.")
+          else:
+              path.write_text(updated)
+              print(f"Patched file_picker compileSdk to 36: {path}")
+          PY
+
+      - name: Ensure Android SDK 36 is installed
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager "platforms;android-36"
+          echo "Android SDK Platform 36 is ready."
 
       - name: Inject google-services.json
         shell: bash
