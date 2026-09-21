@@ -137,6 +137,13 @@ class MediaProvider extends ChangeNotifier {
   }
   Future<void> setRating(MediaItem item, double? rating) async => upsert(item.copyWith(userRating: rating));
   Future<void> setNotes(MediaItem item, String notes) async => upsert(item.copyWith(notes: notes));
+  Future<void> setTaste(MediaItem item, String? taste) async =>
+      upsert(item.copyWith(userTaste: taste));
+
+  Future<List<MediaItem>> topRatedByType(
+    String type,
+    String lang,
+  ) => _repository.getTopRated(type: type, lang: lang);
 
   Future<void> mergeCloudLibrary(List<MediaItem> items) async {
     for (final item in items) {

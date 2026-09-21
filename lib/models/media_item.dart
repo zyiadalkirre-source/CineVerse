@@ -20,6 +20,7 @@ class MediaItem {
   final String? trailerKey;
   final String watchStatus;
   final double? userRating;
+  final String? userTaste;
   final String notes;
   final bool isFavorite;
   final int lastWatchedSeconds;
@@ -32,7 +33,7 @@ class MediaItem {
     this.posterPath, this.backdropPath, required this.voteAverage, this.voteCount = 0,
     this.releaseDate, required this.mediaType, this.genres = const [], this.cast = const [],
     this.director, this.runtime, this.seasons, this.episodes, this.trailerKey,
-    this.watchStatus = 'not_watched', this.userRating, this.notes = '',
+    this.watchStatus = 'not_watched', this.userRating, this.userTaste, this.notes = '',
     this.isFavorite = false, this.lastWatchedSeconds = 0, this.lastWatchedSeason,
     this.lastWatchedEpisode, this.lastWatchedEpisodeName,
   });
@@ -68,6 +69,7 @@ class MediaItem {
       trailerKey: json['trailer_key']?.toString(),
       watchStatus: (json['watch_status'] ?? 'not_watched').toString(),
       userRating: (json['user_rating'] as num?)?.toDouble(),
+      userTaste: json['user_taste']?.toString(),
       notes: (json['notes'] ?? '').toString(),
       isFavorite: json['is_favorite'] == true,
       lastWatchedSeconds: (json['last_watched_seconds'] as num?)?.toInt() ?? 0,
@@ -81,7 +83,7 @@ class MediaItem {
     int? id,String? title,String? originalTitle,String? overview,String? posterPath,String? backdropPath,
     double? voteAverage,int? voteCount,String? releaseDate,String? mediaType,List<String>? genres,List<String>? cast,
     String? director,int? runtime,int? seasons,int? episodes,String? trailerKey,String? watchStatus,
-    Object? userRating=_copyWithUnset,String? notes,bool? isFavorite,int? lastWatchedSeconds,
+    Object? userRating=_copyWithUnset,Object? userTaste=_copyWithUnset,String? notes,bool? isFavorite,int? lastWatchedSeconds,
     int? lastWatchedSeason,int? lastWatchedEpisode,String? lastWatchedEpisodeName,
   }) => MediaItem(
     id:id??this.id,title:title??this.title,originalTitle:originalTitle??this.originalTitle,overview:overview??this.overview,
@@ -89,7 +91,7 @@ class MediaItem {
     voteCount:voteCount??this.voteCount,releaseDate:releaseDate??this.releaseDate,mediaType:mediaType??this.mediaType,
     genres:genres??this.genres,cast:cast??this.cast,director:director??this.director,runtime:runtime??this.runtime,
     seasons:seasons??this.seasons,episodes:episodes??this.episodes,trailerKey:trailerKey??this.trailerKey,
-    watchStatus:watchStatus??this.watchStatus,userRating:userRating==_copyWithUnset?this.userRating:userRating as double?,notes:notes??this.notes,
+    watchStatus:watchStatus??this.watchStatus,userRating:userRating==_copyWithUnset?this.userRating:userRating as double?,userTaste:userTaste==_copyWithUnset?this.userTaste:userTaste as String?,notes:notes??this.notes,
     isFavorite:isFavorite??this.isFavorite,lastWatchedSeconds:lastWatchedSeconds??this.lastWatchedSeconds,
     lastWatchedSeason:lastWatchedSeason??this.lastWatchedSeason,lastWatchedEpisode:lastWatchedEpisode??this.lastWatchedEpisode,
     lastWatchedEpisodeName:lastWatchedEpisodeName??this.lastWatchedEpisodeName);
@@ -98,7 +100,7 @@ class MediaItem {
     'id':id,'title':title,'original_title':originalTitle,'overview':overview,'poster_path':posterPath,'backdrop_path':backdropPath,
     'vote_average':voteAverage,'vote_count':voteCount,'release_date':releaseDate,'media_type':mediaType,'genres':genres,'cast':cast,
     'director':director,'runtime':runtime,'number_of_seasons':seasons,'number_of_episodes':episodes,'trailer_key':trailerKey,
-    'watch_status':watchStatus,'user_rating':userRating,'notes':notes,'is_favorite':isFavorite,
+    'watch_status':watchStatus,'user_rating':userRating,'user_taste':userTaste,'notes':notes,'is_favorite':isFavorite,
     'last_watched_seconds':lastWatchedSeconds,'last_watched_season':lastWatchedSeason,'last_watched_episode':lastWatchedEpisode,
     'last_watched_episode_name':lastWatchedEpisodeName,
   };
