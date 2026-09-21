@@ -7,6 +7,7 @@ import '../models/watch_provider.dart';
 import '../providers/media_provider.dart';
 import '../providers/ai_provider.dart';
 import '../services/ai_service.dart';
+import '../services/offline_download_service.dart';
 
 class DetailScreen extends StatefulWidget {
   final MediaItem item;
@@ -21,7 +22,9 @@ class _DetailScreenState extends State<DetailScreen> {
   List<WatchProvider> watchProviders=[];
   int season=1;
   int? selectedEpisodeNumber;
-  @override void initState(){super.initState();item=widget.item;_load();}
+  bool _offlineSaved = false;
+  bool _offlineLoading = false;
+  @override void initState(){super.initState();item=widget.item;_load();_loadOfflineState();}
   Future<void> _load() async {
     final p=context.read<MediaProvider>();
     final x=await p.details(item,'ar');
@@ -55,6 +58,45 @@ class _DetailScreenState extends State<DetailScreen> {
     await provider.setStatus(item, s);
     if (mounted) setState(() => item = item.copyWith(watchStatus: s));
   }
+  Future<void> _loadOfflineState() async {
+    try {
+      final saved = await OfflineDownloadService.instance.isDownloaded(item);
+      if (mounted) setState(() => _offlineSaved = saved);
+    } catch (_) {}
+  }
+
+  Future<void> _toggleOffline() async {
+    if (_offlineLoading) return;
+    setState(() => _offlineLoading = true);
+    try {
+      if (_offlineSaved) {
+        await OfflineDownloadService.instance.remove(item);
+        if (mounted) {
+          setState(() => _offlineSaved = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تم حذف النسخة المحلية.')),
+          );
+        }
+      } else {
+        await OfflineDownloadService.instance.download(item);
+        if (mounted) {
+          setState(() => _offlineSaved = true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تم حفظ معلومات العمل وصوره للاستخدام دون اتصال.')),
+          );
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذر حفظ العمل للاستخدام دون اتصال.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _offlineLoading = false);
+    }
+  }
+
   Future<void> _setTaste(String taste) async {
     final next = item.userTaste == taste ? null : taste;
     await context.read<MediaProvider>().setTaste(item, next);
@@ -100,6 +142,29 @@ class _DetailScreenState extends State<DetailScreen> {
           icon:Icon(item.isFavorite?Icons.favorite:Icons.favorite_border),
           label:Text(item.isFavorite?'إزالة من المفضلة':'إضافة للمفضلة'),
         )),
+        const SizedBox(height:8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _offlineLoading ? null : _toggleOffline,
+            icon: _offlineLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    _offlineSaved
+                        ? Icons.download_done_rounded
+                        : Icons.download_for_offline_outlined,
+                  ),
+            label: Text(
+              _offlineSaved
+                  ? 'محفوظ دون اتصال — إزالة'
+                  : 'حفظ دون اتصال',
+            ),
+          ),
+        ),
         const SizedBox(height:18),
         Text('رأيك',style:Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight:FontWeight.bold)),
         const SizedBox(height:8),
