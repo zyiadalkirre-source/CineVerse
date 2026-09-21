@@ -80,14 +80,28 @@ jobs:
           set -euo pipefail
 
           sdk_root="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          sdkmanager_path="$(find "$sdk_root" -type f -name sdkmanager -path '*/cmdline-tools/*/bin/sdkmanager' -print -quit || true)"
+          sdkmanager_path=""
+          for candidate in \
+            "$sdk_root/cmdline-tools/latest/bin/sdkmanager" \
+            "$sdk_root/cmdline-tools/bin/sdkmanager"; do
+            if [ -x "$candidate" ]; then
+              sdkmanager_path="$candidate"
+              break
+            fi
+          done
+
           if [ -z "$sdkmanager_path" ]; then
-            echo "sdkmanager was not found in the Android SDK installation."
-            echo "ANDROID_HOME=${ANDROID_HOME:-<unset>}"
-            find /usr/local/lib/android/sdk -maxdepth 5 -type f -name sdkmanager -print 2>/dev/null || true
+            sdkmanager_path="$(find "$sdk_root/cmdline-tools" -type f -name sdkmanager -path '*/bin/sdkmanager' -print -quit 2>/dev/null || true)"
+          fi
+
+          if [ -z "$sdkmanager_path" ]; then
+            echo "sdkmanager was not found under $sdk_root"
+            find "$sdk_root" -maxdepth 5 -type f -name sdkmanager -print 2>/dev/null || true
             exit 1
           fi
 
+          echo "Using sdkmanager: $sdkmanager_path"
+          yes | "$sdkmanager_path" --licenses >/dev/null || true
           "$sdkmanager_path" "platforms;android-36"
           echo "Android SDK Platform 36 is ready."
 
