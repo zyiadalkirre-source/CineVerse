@@ -4,6 +4,12 @@ class FirebaseBootstrap {
   static bool configured = false;
 
   static Future<void> initialize() async {
+    if (configured) return;
+    if (Firebase.apps.isNotEmpty) {
+      configured = true;
+      return;
+    }
+
     const apiKey = String.fromEnvironment('FIREBASE_API_KEY');
     const appId = String.fromEnvironment('FIREBASE_APP_ID');
     const messagingSenderId = String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID');
