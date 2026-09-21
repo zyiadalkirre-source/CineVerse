@@ -111,14 +111,19 @@ class _WatchScreenState extends State<WatchScreen> {
     final prefs = await SharedPreferences.getInstance();
     _prefs = prefs;
 
-    final episodeSaved = await _mediaProvider.getEpisodeProgress(
-      item: widget.item,
-      season: widget.season,
-      episode: widget.episode,
-    );
-    final saved = episodeSaved?['position_seconds'] is int
-        ? episodeSaved!['position_seconds'] as int
-        : prefs.getInt(_progressKey) ?? 0;
+    final rememberProgress = prefs.getBool('stream_rememberProgress') ?? true;
+    final episodeSaved = rememberProgress
+        ? await _mediaProvider.getEpisodeProgress(
+            item: widget.item,
+            season: widget.season,
+            episode: widget.episode,
+          )
+        : null;
+    final saved = rememberProgress
+        ? (episodeSaved?['position_seconds'] is int
+            ? episodeSaved!['position_seconds'] as int
+            : prefs.getInt(_progressKey) ?? 0)
+        : 0;
 
     final uri = Uri.tryParse(_resolvedUrl!);
     if (uri == null || !uri.hasScheme) {
@@ -134,8 +139,21 @@ class _WatchScreenState extends State<WatchScreen> {
       if (position > Duration.zero && position < controller.value.duration) {
         await controller.seekTo(position);
       }
+
+      final defaultSpeed = prefs.getDouble('stream_defaultSpeed') ?? 1.0;
+      await controller.setPlaybackSpeed(defaultSpeed.clamp(0.25, 2.0));
+      _playbackSpeed = defaultSpeed.clamp(0.25, 2.0);
+
       controller.addListener(_onVideoUpdate);
       if (mounted) setState(() {});
+
+      if (prefs.getBool('stream_autoFullscreen') == true && mounted && !_fullscreen) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_fullscreen) {
+            _fullscreenToggle();
+          }
+        });
+      }
     } catch (_) {
       _controller?.dispose();
       _controller = null;
@@ -177,6 +195,10 @@ class _WatchScreenState extends State<WatchScreen> {
       return;
     }
 
+    if ((_prefs?.getBool('stream_autoNext') ?? true) == false) {
+      return;
+    }
+
     final duration = controller.value.duration;
     final position = controller.value.position;
     if (duration <= Duration.zero ||
@@ -214,29 +236,19 @@ class _WatchScreenState extends State<WatchScreen> {
       );
       if (!mounted) return;
 
-      final goNext = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => AlertDialog(
-          title: const Text('الحلقة التالية'),
-          content: Text(
-            'انتهت الحلقة ' + widget.episode.toString() +
-                '. هل تريد تشغيل الحلقة ' + nextNumber.toString() + ' الآن?',
+      final countdown = _prefs?.getInt('stream_nextCountdown') ?? 10;
+      if (countdown > 0 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'الحلقة التالية ستبدأ بعد ' + countdown.toString() + ' ثوانٍ…',
+            ),
+            duration: Duration(seconds: countdown),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('لاحقاً'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('تشغيل'),
-            ),
-          ],
-        ),
-      );
-
-      if (goNext != true || !mounted) return;
+        );
+        await Future<void>.delayed(Duration(seconds: countdown));
+        if (!mounted) return;
+      }
 
       await Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -258,7 +270,13 @@ class _WatchScreenState extends State<WatchScreen> {
   Future<void> _savePosition() async {
     final controller = _controller;
     final prefs = _prefs;
-    if (controller == null || prefs == null || !controller.value.isInitialized || !_isEpisode) return;
+    if (controller == null ||
+        prefs == null ||
+        !controller.value.isInitialized ||
+        !_isEpisode ||
+        prefs.getBool('stream_rememberProgress') == false) {
+      return;
+    }
 
     final seconds = controller.value.position.inSeconds;
     if (seconds <= 0 || _savingPosition) return;
