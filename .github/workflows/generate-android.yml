@@ -1,0 +1,56 @@
+name: Generate Android Scaffold (One-time)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Generate Android scaffold
+        run: flutter create --platforms=android --org com.cineverse .
+
+      - name: Preserve keep.xml
+        run: |
+          test -f android/app/src/main/res/raw/keep.xml
+          ls -la android/app/src/main/res/raw/keep.xml
+
+      - name: Verify generated Android project
+        run: |
+          set -euo pipefail
+          test -f android/settings.gradle || test -f android/settings.gradle.kts
+          test -f android/build.gradle || test -f android/build.gradle.kts
+          test -f android/app/build.gradle || test -f android/app/build.gradle.kts
+          test -f android/app/src/main/AndroidManifest.xml
+          test -f android/app/src/main/kotlin/com/cineverse/cineverse/MainActivity.kt ||             test -f android/app/src/main/java/com/cineverse/cineverse/MainActivity.java
+          echo "Android scaffold generated successfully."
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit scaffold
+        run: |
+          set -euo pipefail
+          git add android/
+          if git diff --staged --quiet; then
+            echo "No Android scaffold changes to commit."
+          else
+            git commit -m "chore: add complete android scaffold [skip ci]"
+            git push
+          fi
