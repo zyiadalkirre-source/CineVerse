@@ -78,7 +78,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sdkmanager "platforms;android-36"
+
+          sdk_root="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          sdkmanager_path="$(find "$sdk_root" -type f -name sdkmanager -path '*/cmdline-tools/*/bin/sdkmanager' -print -quit || true)"
+          if [ -z "$sdkmanager_path" ]; then
+            echo "sdkmanager was not found in the Android SDK installation."
+            echo "ANDROID_HOME=${ANDROID_HOME:-<unset>}"
+            find /usr/local/lib/android/sdk -maxdepth 5 -type f -name sdkmanager -print 2>/dev/null || true
+            exit 1
+          fi
+
+          "$sdkmanager_path" "platforms;android-36"
           echo "Android SDK Platform 36 is ready."
 
       - name: Inject google-services.json
