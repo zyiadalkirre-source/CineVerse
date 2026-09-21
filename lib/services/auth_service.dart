@@ -22,6 +22,7 @@ class AuthService implements AuthClient {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _google = GoogleSignIn.instance;
+  bool _initialized = false;
 
   @override
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -30,7 +31,11 @@ class AuthService implements AuthClient {
   User? get currentUser => _auth.currentUser;
 
   Future<void> initialize() async {
-    if (!kIsWeb) await _google.initialize();
+    if (_initialized) return;
+    if (!kIsWeb) {
+      await _google.initialize();
+    }
+    _initialized = true;
   }
 
   @override
