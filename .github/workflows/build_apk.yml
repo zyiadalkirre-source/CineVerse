@@ -173,10 +173,28 @@ jobs:
           """
               app_gradle.write_text(text)
 
+          # Flutter can store the Kotlin plugin version in settings.gradle(.kts)
+          # or gradle/libs.versions.toml. Patch all Gradle/Kotlin version files.
+          for path in root.rglob("*"):
+              if not path.is_file() or path.suffix not in {".gradle", ".kts", ".toml"}:
+                  continue
+              try:
+                  text = path.read_text()
+              except UnicodeDecodeError:
+                  continue
+              for old_version in ("1.7.10", "1.8.22", "2.1.0", "2.2.20"):
+                  text = text.replace(old_version, kotlin_version)
+              text = text.replace("com.android.tools.build:gradle:7.3.0", f"com.android.tools.build:gradle:{agp_version}")
+              text = text.replace("com.android.tools.build:gradle:7.4.2", f"com.android.tools.build:gradle:{agp_version}")
+              path.write_text(text)
+
           combined = ""
-          for path in (settings_gradle, build_gradle, app_gradle):
-              if path.exists():
-                  combined += path.read_text() + "\n"
+          for path in root.rglob("*"):
+              if path.is_file() and path.suffix in {".gradle", ".kts", ".toml"}:
+                  try:
+                      combined += path.read_text() + "\n"
+                  except UnicodeDecodeError:
+                      pass
 
           if kotlin_version not in combined:
               raise SystemExit("Kotlin 2.3.21 was not applied to the Android project")
