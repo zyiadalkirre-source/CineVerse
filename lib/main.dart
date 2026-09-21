@@ -139,12 +139,12 @@ class CineVerseApp extends StatelessWidget {
       child: app,
     );
 
-    if (FirebaseBootstrap.configured) {
-      app = ChangeNotifierProvider<AuthProvider>(
-        create: (_) => AuthProvider(),
-        child: app,
-      );
-    }
+    // Keep AuthProvider in the tree even when Firebase is unavailable.
+    // It will remain in safe local/offline mode instead of breaking dependents.
+    app = ChangeNotifierProvider<AuthProvider>(
+      create: (_) => AuthProvider(),
+      child: app,
+    );
 
     app = ChangeNotifierProvider<SettingsProvider>(
       create: (_) => SettingsProvider(),
