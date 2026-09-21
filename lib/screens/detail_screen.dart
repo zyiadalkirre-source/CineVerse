@@ -55,6 +55,21 @@ class _DetailScreenState extends State<DetailScreen> {
     await provider.setStatus(item, s);
     if (mounted) setState(() => item = item.copyWith(watchStatus: s));
   }
+  Future<void> _setTaste(String taste) async {
+    final next = item.userTaste == taste ? null : taste;
+    await context.read<MediaProvider>().setTaste(item, next);
+    if (mounted) setState(() => item = item.copyWith(userTaste: next));
+  }
+
+  Widget _tasteButton(String label, String value, IconData icon) {
+    return FilterChip(
+      selected: item.userTaste == value,
+      avatar: Icon(icon, size: 18),
+      label: Text(label),
+      onSelected: (_) => _setTaste(value),
+    );
+  }
+
   Future<void> _note()async{final c=TextEditingController(text:item.notes);final ok=await showDialog<bool>(context:context,builder:(_)=>AlertDialog(title:const Text('ملاحظتي'),content:TextField(controller:c,maxLines:5),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('إلغاء')),ElevatedButton(onPressed:()=>Navigator.pop(context,true),child:const Text('حفظ'))]));if(ok==true){await context.read<MediaProvider>().setNotes(item,c.text);if(mounted)setState(()=>item=item.copyWith(notes:c.text));}c.dispose();}
   Future<void> _ai()async{setState(()=>loading=true);try{final x=await context.read<AiProvider>().summarize(item);if(mounted)showDialog(context:context,builder:(_)=>AlertDialog(title:const Text('ملخص AI'),content:SingleChildScrollView(child:Text(x.summary)),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('إغلاق'))]));}on AiServiceException catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.message)));}catch(_){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('حدث خطأ أثناء تحليل العمل بالذكاء الاصطناعي. حاول مرة أخرى.')));}finally{if(mounted)setState(()=>loading=false);}}
   @override Widget build(BuildContext context){
@@ -85,6 +100,18 @@ class _DetailScreenState extends State<DetailScreen> {
           icon:Icon(item.isFavorite?Icons.favorite:Icons.favorite_border),
           label:Text(item.isFavorite?'إزالة من المفضلة':'إضافة للمفضلة'),
         )),
+        const SizedBox(height:18),
+        Text('رأيك',style:Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight:FontWeight.bold)),
+        const SizedBox(height:8),
+        Wrap(
+          spacing:8,
+          runSpacing:8,
+          children:[
+            _tasteButton('أحببته','love',Icons.favorite),
+            _tasteButton('أعجبني','like',Icons.thumb_up_alt_outlined),
+            _tasteButton('ليس لي','dislike',Icons.thumb_down_alt_outlined),
+          ],
+        ),
         const SizedBox(height:18),
         Text('القصة',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold)),
         const SizedBox(height:6),Text(item.overview.isEmpty?'لا يوجد وصف متاح':item.overview),
