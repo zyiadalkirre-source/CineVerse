@@ -301,6 +301,8 @@ jobs:
           echo "Google Services Gradle plugin enabled."
       - name: Verify Firebase Android configuration
         shell: bash
+        env:
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
         run: |
           set -euo pipefail
           if [ ! -f android/app/google-services.json ]; then
@@ -356,19 +358,31 @@ jobs:
               )
 
           oauth_client_types = []
+          has_web_oauth_client = False
           for client in clients:
-              oauth_client_types.extend(
-                  str(entry.get("client_type"))
-                  for entry in client.get("oauth_client", [])
+              entries = client.get("oauth_client", [])
+              oauth_client_types.extend(str(entry.get("client_type")) for entry in entries)
+              has_web_oauth_client = has_web_oauth_client or any(
+                  str(entry.get("client_type")) == "3" for entry in entries
               )
 
-          # A missing Web OAuth client must not block the APK build.
-          # The Google Sign-In runtime configuration is validated separately;
-          # this step only verifies that the Android Firebase file is structurally usable.
+          explicit_web_client_id = __import__("os").environ.get("GOOGLE_WEB_CLIENT_ID", "").strip()
+          if not has_web_oauth_client and not explicit_web_client_id:
+              raise SystemExit(
+                  "Google Sign-In is not fully configured: google-services.json has no "
+                  "Web OAuth client (client_type=3), and GOOGLE_WEB_CLIENT_ID is not set. "
+                  "Enable Google Sign-In in Firebase and download a fresh google-services.json, "
+                  "or provide the Web OAuth client ID via the GOOGLE_WEB_CLIENT_ID secret."
+              )
+
+          if explicit_web_client_id and not explicit_web_client_id.endswith(".apps.googleusercontent.com"):
+              raise SystemExit("GOOGLE_WEB_CLIENT_ID does not look like a Google OAuth client ID")
+
           print("Firebase Android configuration is structurally valid.")
           print("OAuth client types found:", ", ".join(sorted(set(oauth_client_types))) if oauth_client_types else "none")
           print("Configured Android package(s):", ", ".join(android_packages))
           print("OAuth client entries:", oauth_clients)
+          print("Web OAuth fallback configured:", "yes" if explicit_web_client_id else "no (google-services.json)")
           PY
 
       - name: Install Android SDK 36
@@ -477,6 +491,7 @@ jobs:
             --dart-define=FIREBASE_PROJECT_ID="${{ secrets.FIREBASE_PROJECT_ID }}" \
             --dart-define=FIREBASE_AUTH_DOMAIN="${{ secrets.FIREBASE_AUTH_DOMAIN }}" \
             --dart-define=FIREBASE_STORAGE_BUCKET="${{ secrets.FIREBASE_STORAGE_BUCKET }}" \
+            --dart-define=GOOGLE_WEB_CLIENT_ID="${{ secrets.GOOGLE_WEB_CLIENT_ID }}" \
             --dart-define=VIDEO_SOURCE_BASE_URL="${{ secrets.VIDEO_SOURCE_BASE_URL }}"
 
       - name: Verify APK exists
@@ -484,6 +499,13 @@ jobs:
         run: |
           test -f build/app/outputs/flutter-apk/app-release.apk
           ls -lh build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Show APK signing certificate SHA-1
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "===== APK signing certificate ====="
+          keytool -printcert -jarfile build/app/outputs/flutter-apk/app-release.apk | sed -n '/Owner:/p;/Issuer:/p;/SHA1:/p;/SHA-256:/p'
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
