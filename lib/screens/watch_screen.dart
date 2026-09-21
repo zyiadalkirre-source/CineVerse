@@ -52,6 +52,7 @@ class _WatchScreenState extends State<WatchScreen> {
   DateTime _lastLocalSave = DateTime.fromMillisecondsSinceEpoch(0);
   bool _savingPosition = false;
   double _playbackSpeed = 1.0;
+  bool _nextEpisodeHandled = false;
 
   bool get _isEpisode => widget.season > 0 && widget.episode > 0;
 
@@ -133,7 +134,7 @@ class _WatchScreenState extends State<WatchScreen> {
       if (position > Duration.zero && position < controller.value.duration) {
         await controller.seekTo(position);
       }
-      controller.addListener(_savePosition);
+      controller.addListener(_onVideoUpdate);
       if (mounted) setState(() {});
     } catch (_) {
       _controller?.dispose();
@@ -166,6 +167,94 @@ class _WatchScreenState extends State<WatchScreen> {
 
   String get _progressKey => 'watch_progress_${widget.item.mediaType}_${widget.item.id}_${widget.season}_${widget.episode}';
 
+  void _onVideoUpdate() {
+    _savePosition();
+    final controller = _controller;
+    if (controller == null ||
+        !controller.value.isInitialized ||
+        !_isEpisode ||
+        _nextEpisodeHandled) {
+      return;
+    }
+
+    final duration = controller.value.duration;
+    final position = controller.value.position;
+    if (duration <= Duration.zero ||
+        position < duration - const Duration(seconds: 2)) {
+      return;
+    }
+
+    _nextEpisodeHandled = true;
+    _openNextEpisode();
+  }
+
+  Future<void> _openNextEpisode() async {
+    try {
+      final episodes = await _mediaProvider.getTvEpisodes(
+        widget.item.id,
+        widget.season,
+      );
+      final current = widget.episode;
+      Map<String, dynamic>? next;
+      for (final episode in episodes) {
+        final number = (episode['episode_number'] as num?)?.toInt() ?? 0;
+        if (number == current + 1) {
+          next = episode;
+          break;
+        }
+      }
+
+      if (next == null || !mounted) return;
+
+      final nextNumber = (next['episode_number'] as num?)?.toInt() ?? 0;
+      final watchUrl = await VideoSourceService.instance.resolve(
+        item: widget.item,
+        season: widget.season,
+        episode: nextNumber,
+      );
+      if (!mounted) return;
+
+      final goNext = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          title: const Text('الحلقة التالية'),
+          content: Text(
+            'انتهت الحلقة ' + widget.episode.toString() +
+                '. هل تريد تشغيل الحلقة ' + nextNumber.toString() + ' الآن?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('لاحقاً'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('تشغيل'),
+            ),
+          ],
+        ),
+      );
+
+      if (goNext != true || !mounted) return;
+
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => WatchScreen(
+            item: widget.item,
+            title: widget.title,
+            episodeName:
+                (next?['name'] ?? 'الحلقة التالية').toString(),
+            season: widget.season,
+            episode: nextNumber,
+            videoUrl: watchUrl,
+          ),
+        ),
+      );
+    } catch (_) {
+      _nextEpisodeHandled = false;
+    }
+  }
   Future<void> _savePosition() async {
     final controller = _controller;
     final prefs = _prefs;
@@ -245,7 +334,7 @@ class _WatchScreenState extends State<WatchScreen> {
   @override
   void dispose() {
     _savePosition();
-    _controller?.removeListener(_savePosition);
+    _controller?.removeListener(_onVideoUpdate);
     _controller?.dispose();
     _youtubeController?.dispose();
     SystemChrome.setPreferredOrientations([]);
